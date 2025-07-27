@@ -1,92 +1,111 @@
 # image_compressor
 
-A new Flutter FFI plugin project.
+A Flutter plugin for efficient JPEG image compression using native C/C++ code via FFI for Android and iOS.
 
-## Getting Started
+---
 
-This project is a starting point for a Flutter
-[FFI plugin](https://flutter.dev/to/ffi-package),
-a specialized package that includes native code directly invoked with Dart FFI.
+## Overview
 
-## Project structure
+`image_compressor` is a Flutter plugin that delivers fast, high-quality image compression by leveraging native C/C++ code accessed through **FFI** (Foreign Function Interface).
 
-This template uses the following structure:
+This project provides a solid foundation for native image compression in Flutter apps, featuring:
 
-* `src`: Contains the native source code, and a CmakeFile.txt file for building
-  that source code into a dynamic library.
+- Optimized JPEG compression
+- Smart resizing based on max dimensions
+- Simple Dart API for easy integration
 
-* `lib`: Contains the Dart code that defines the API of the plugin, and which
-  calls into the native code using `dart:ffi`.
+---
 
-* platform folders (`android`, `ios`, `windows`, etc.): Contains the build files
-  for building and bundling the native code library with the platform application.
+## Installation
 
-## Building and bundling native code
-
-The `pubspec.yaml` specifies FFI plugins as follows:
+Add the following to your `pubspec.yaml`:
 
 ```yaml
-  plugin:
-    platforms:
-      some_platform:
-        ffiPlugin: true
+dependencies:
+  image_compressor:
+    git:
+      url: https://github.com/Mairramer/image_compressor.git
 ```
 
-This configuration invokes the native build for the various target platforms
-and bundles the binaries in Flutter applications using these FFI plugins.
+Then run:
 
-This can be combined with dartPluginClass, such as when FFI is used for the
-implementation of one platform in a federated plugin:
+```bash
+flutter pub get
+```
+
+---
+
+## Basic Usage
+
+```dart
+import 'package:image_compressor/image_compressor.dart';
+
+final compressedBase64 = await image_compressor.compressImageFromP(
+  '/path/to/image.jpg',
+  quality: 70,
+  maxSize: 1080,
+);
+```
+
+This method returns the compressed image encoded as a base64 string.
+
+---
+
+## Project Structure
+
+- **`src/`**: Native C/C++ source code and CMakeLists for building native libraries.
+- **`lib/`**: Dart code exposing the public API and FFI bindings.
+- **`android/`, `ios/`**: Platform-specific build configurations for bundling native binaries.
+- **`example/`**: A Flutter example app demonstrating plugin usage.
+
+---
+
+## Native Build and Packaging
+
+The plugin automatically compiles and packages native libraries for Android and iOS using:
+
+- **Android**: Gradle + Android NDK
+- **iOS**: CocoaPods + Xcode
+- **Windows/Linux/macOS** (planned): CMake
+
+Configured in `pubspec.yaml` as:
 
 ```yaml
-  plugin:
-    implements: some_other_plugin
-    platforms:
-      some_platform:
-        dartPluginClass: SomeClass
-        ffiPlugin: true
+plugin:
+  platforms:
+    android:
+      ffiPlugin: true
+    ios:
+      ffiPlugin: true
 ```
 
-A plugin can have both FFI and method channels:
+---
 
-```yaml
-  plugin:
-    platforms:
-      some_platform:
-        pluginClass: SomeName
-        ffiPlugin: true
+## Binding Generation
+
+Dart bindings to the native code are auto-generated using [package:ffigen](https://pub.dev/packages/ffigen).
+
+Regenerate bindings with:
+
+```bash
+dart run ffigen --config ffigen.yaml
 ```
 
-The native build systems that are invoked by FFI (and method channel) plugins are:
+---
 
-* For Android: Gradle, which invokes the Android NDK for native builds.
-  * See the documentation in android/build.gradle.
-* For iOS and MacOS: Xcode, via CocoaPods.
-  * See the documentation in ios/image_compressor.podspec.
-  * See the documentation in macos/image_compressor.podspec.
-* For Linux and Windows: CMake.
-  * See the documentation in linux/CMakeLists.txt.
-  * See the documentation in windows/CMakeLists.txt.
+## Invoking Native Code
 
-## Binding to native code
+- Short-running native functions can be called directly via FFI.
+- Longer-running operations (e.g., image compression) should run in isolates to keep UI smooth.
 
-To use the native code, bindings in Dart are needed.
-To avoid writing these by hand, they are generated from the header file
-(`src/image_compressor.h`) by `package:ffigen`.
-Regenerate the bindings by running `dart run ffigen --config ffigen.yaml`.
+See `lib/image_compressor.dart` for usage examples.
 
-## Invoking native code
+---
 
-Very short-running native functions can be directly invoked from any isolate.
-For example, see `sum` in `lib/image_compressor.dart`.
+## Flutter Documentation
 
-Longer-running functions should be invoked on a helper isolate to avoid
-dropping frames in Flutter applications.
-For example, see `sumAsync` in `lib/image_compressor.dart`.
+For more info on Flutter and plugin development:
 
-## Flutter help
-
-For help getting started with Flutter, view our
-[online documentation](https://docs.flutter.dev), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
-
+- [Flutter Official Docs](https://docs.flutter.dev)
+- [Flutter FFI Guide](https://flutter.dev/docs/development/platform-integration/c-interop)
+- [Official Flutter FFI Plugin Example](https://github.com/flutter/plugins/tree/main/packages/ffi/example)

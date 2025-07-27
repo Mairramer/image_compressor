@@ -102,7 +102,7 @@ static bool compress_to_jpeg_buffer(
     return stbi_write_jpg_to_func(write_jpg_to_vector, &buffer, width, height, channels, image_data, quality) != 0;
 }
 
-extern "C" char* compress_image(const char* path, int quality, int max_size) {
+extern "C" char* image_compressor_from_path(const char* path, int quality, int max_size) {
     if (!path) return nullptr;
 
     if (quality < 1) quality = 1;
@@ -151,6 +151,6 @@ extern "C" char* compress_image(const char* path, int quality, int max_size) {
     return result;
 }
 
-extern "C" void free_compressed_image(char* ptr) {
+extern "C" void image_compressor_free_string(char* ptr) {
     free(ptr);
 }

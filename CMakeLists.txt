@@ -15,11 +15,18 @@ set_target_properties(image_compressor PROPERTIES
     POSITION_INDEPENDENT_CODE ON
 )
 
+# Debug flags: Slight optimization and includes debug symbols
+set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -Og -g")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Og -g")
+
+# Release flags: Maximum optimization, no debug symbols
+set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O3 -DNDEBUG")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG")
+
 target_include_directories(image_compressor PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-# Android/iOS configurações podem ir aqui se quiser
 if (ANDROID)
     message(STATUS "Configuring for Android")
     # target_compile_definitions(image_compressor PRIVATE ANDROID_BUILD)

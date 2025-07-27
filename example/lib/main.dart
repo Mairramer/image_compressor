@@ -1,29 +1,21 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img_pkg;
-import 'package:image_compressor/image_compressor.dart' as image_compressor;
+import 'package:image_compressor/image_compressor.dart'; // import interface and implementation
 import 'package:image_picker/image_picker.dart';
 
-void main() {
-  runApp(const MyApp());
-}
+void main() => runApp(const MyApp());
 
-class MyApp extends StatefulWidget {
+class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
-  State<MyApp> createState() => _MyAppState();
-}
-
-class _MyAppState extends State<MyApp> {
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(home: HomePage());
-  }
+  Widget build(BuildContext context) => const MaterialApp(home: HomePage());
 }
 
 class HomePage extends StatefulWidget {
@@ -38,121 +30,143 @@ class _HomePageState extends State<HomePage> {
   Uint8List? _dartOutput;
   Uint8List? _ffiOutput;
   String _result = '';
+  bool _isProcessing = false;
+
+  final ImagePicker _picker = ImagePicker();
+
+  late final ImageCompressor _compressor;
+
+  @override
+  void initState() {
+    super.initState();
+    _compressor = NativeImageCompressor();
+  }
 
   Future<void> _pickImage() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery);
-    if (picked != null) {
-      setState(() {
-        _imageFile = File(picked.path);
-        _dartOutput = null;
-        _ffiOutput = null;
-        _result = '';
-      });
+    try {
+      final picked = await _picker.pickImage(source: ImageSource.gallery);
+      if (picked != null) {
+        setState(() {
+          _imageFile = File(picked.path);
+          _dartOutput = null;
+          _ffiOutput = null;
+          _result = '';
+        });
+      }
+    } catch (e) {
+      _showError('Error selecting image: $e');
     }
   }
 
-  Future<({Duration duration, Uint8List output})> _runBenchmark(
-    Future<String> Function(String path) compressor,
-    String path,
-  ) async {
-    final start = DateTime.now();
-    final resultBase64 = await compressor(path);
-    final output = base64Decode(resultBase64);
-    final duration = DateTime.now().difference(start);
-    return (duration: duration, output: output);
-  }
-
-  Future<({Duration duration, Uint8List output})> _runBenchmarkFFI(
-    Future<String> Function(String path) compressor,
-    String path,
-  ) async {
-    final start = DateTime.now();
-    final output = await compressor(path);
-    final duration = DateTime.now().difference(start);
-    return (duration: duration, output: base64Decode(output));
-  }
-
-  double _getPhotoSize(String? base64String) {
-    if (base64String == null) {
-      return 0;
-    }
-
-    final List<int> bytes = base64Decode(base64String);
-
-    final double kilobytes = (bytes.length / 1024);
-
-    return double.parse(kilobytes.toStringAsFixed(2));
+  Future<_BenchmarkResult> _runBenchmark({
+    required Future<String> Function(String path) compressor,
+    required String path,
+  }) async {
+    final stopwatch = Stopwatch()..start();
+    final base64Result = await compressor(path);
+    stopwatch.stop();
+    final outputBytes = base64Decode(base64Result);
+    return _BenchmarkResult(duration: stopwatch.elapsed, output: outputBytes);
   }
 
   Future<void> _benchmarkBoth() async {
     if (_imageFile == null) return;
-    final path = _imageFile!.path;
-    final originalSize = await _imageFile!.length();
-
-    final dart = await _runBenchmark(AppImageCompression.compressImage, path);
-    final ffi = await _runBenchmarkFFI((p) => image_compressor.compressImageFromP(p), path);
 
     setState(() {
-      _dartOutput = dart.output;
-      _ffiOutput = ffi.output;
-      final originalSizeKB = (originalSize / 1024).toStringAsFixed(2);
-      final dartSizeKB = (dart.output.lengthInBytes / 1024).toStringAsFixed(2);
-      final ffiSizeKB = (ffi.output.lengthInBytes / 1024).toStringAsFixed(2);
-
-      _result =
-          '''
-🏁 **Benchmark de Compressão**
-
-📷 Original: $originalSize bytes
-
-🧪 Dart:
-  • Tempo: ${dart.duration.inMilliseconds} ms
-  • Tamanho: ${dart.output.lengthInBytes} bytes
-
-⚙️ FFI:
-  • Tempo: ${ffi.duration.inMilliseconds} ms
-  • Tamanho: ${ffi.output.lengthInBytes} bytes
-''';
-      if (_dartOutput != null) {
-        _result += '\n\n📊 Tamanho da Imagem Dart: $dartSizeKB KB';
-      }
-      if (_ffiOutput != null) {
-        _result += '\n📊 Tamanho da Imagem FFI: $ffiSizeKB KB';
-      }
-      // _result += '\n\n📏 Tamanho Original: ${_getPhotoSize(base64Encode(_imageFile!.readAsBytesSync()))} KB';
+      _isProcessing = true;
+      _result = '';
     });
 
-    print(_result);
+    try {
+      final originalSize = await _imageFile!.length();
+
+      final dartResult = await _runBenchmark(compressor: AppImageCompression.compressImage, path: _imageFile!.path);
+
+      final ffiResult = await _runBenchmark(compressor: _compressor.compressImageFromPath, path: _imageFile!.path);
+
+      setState(() {
+        _dartOutput = dartResult.output;
+        _ffiOutput = ffiResult.output;
+
+        _result =
+            '''
+🏁 Compression Benchmark
+
+📷 Original:
+  • Size: ${_formatBytes(originalSize)}
+
+🧪 Dart:
+  • Time: ${dartResult.duration.inMilliseconds} ms
+  • Size: ${_formatBytes(dartResult.output.length)}
+
+⚙️ FFI:
+  • Time: ${ffiResult.duration.inMilliseconds} ms
+  • Size: ${_formatBytes(ffiResult.output.length)}
+''';
+      });
+      print(_result);
+    } catch (e) {
+      _showError('Error during benchmark: $e');
+    } finally {
+      setState(() => _isProcessing = false);
+    }
+  }
+
+  String _formatBytes(int bytes, [int decimals = 2]) {
+    if (bytes <= 0) return "0 B";
+    const suffixes = ['B', 'KB', 'MB', 'GB'];
+    final i = (bytes > 0) ? (math.log(bytes) / math.log(1024)).floor() : 0;
+    final size = bytes / math.pow(1024, i);
+    return '${size.toStringAsFixed(decimals)} ${suffixes[i]}';
+  }
+
+  void _showError(String message) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Benchmark de Compressão')),
+      appBar: AppBar(title: const Text('Compression Benchmark')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: SingleChildScrollView(
           child: Column(
             children: [
-              ElevatedButton(onPressed: _pickImage, child: const Text('Selecionar Imagem')),
+              ElevatedButton.icon(
+                onPressed: _isProcessing ? null : _pickImage,
+                icon: const Icon(Icons.photo_library),
+                label: const Text('Select Image'),
+              ),
               if (_imageFile != null) ...[
+                const SizedBox(height: 16),
                 Image.file(_imageFile!, height: 150),
                 const SizedBox(height: 16),
-                ElevatedButton(onPressed: _benchmarkBoth, child: const Text('Rodar Benchmark')),
+                ElevatedButton.icon(
+                  onPressed: _isProcessing ? null : _benchmarkBoth,
+                  icon: _isProcessing
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.timer),
+                  label: Text(_isProcessing ? 'Processing...' : 'Run Benchmark'),
+                ),
               ],
-              const SizedBox(height: 16),
-              if (_result.isNotEmpty) Text(_result, style: const TextStyle(fontFamily: 'monospace')),
-              if (_dartOutput != null)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [const Text('Imagem Dart'), Image.memory(_dartOutput!, height: 150)],
-                ),
-              if (_ffiOutput != null)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [const Text('Imagem FFI'), Image.memory(_ffiOutput!, height: 150)],
-                ),
+              const SizedBox(height: 24),
+              if (_result.isNotEmpty)
+                SelectableText(_result, style: const TextStyle(fontFamily: 'monospace', fontSize: 14)),
+              const SizedBox(height: 24),
+              if (_dartOutput != null) ...[
+                const Text('Compressed Image - Dart', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Image.memory(_dartOutput!, height: 150),
+              ],
+              if (_ffiOutput != null) ...[
+                const SizedBox(height: 16),
+                const Text('Compressed Image - FFI', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Image.memory(_ffiOutput!, height: 150),
+              ],
             ],
           ),
         ),
@@ -161,42 +175,38 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
+class _BenchmarkResult {
+  final Duration duration;
+  final Uint8List output;
+
+  _BenchmarkResult({required this.duration, required this.output});
+}
+
 Future<Uint8List> _readFileBytes(String path) async {
-  try {
-    final file = File(path);
-    if (!await file.exists()) {
-      throw Exception('File not found: $path');
-    }
-    return await file.readAsBytes();
-  } catch (e) {
-    debugPrint('Error reading file: $e');
-    rethrow;
+  final file = File(path);
+  if (!await file.exists()) {
+    throw Exception('File not found: $path');
   }
+  return await file.readAsBytes();
 }
 
 mixin AppImageCompression {
   static Future<String> compressImage(String path) async {
     final bytes = await compute(_readFileBytes, path);
-
     return await compute((List<dynamic> args) => compressImageFromBase64WithQuality(args[0]), [base64Encode(bytes)]);
   }
 
   static String compressImageFromBase64WithQuality(
-    String? imageBase64, {
+    String imageBase64, {
     int maxWidth = 1080,
     int maxHeight = 1920,
     int quality = 70,
   }) {
-    if (imageBase64 == null || imageBase64.isEmpty) {
-      return '';
-    }
+    if (imageBase64.isEmpty) return '';
 
-    final Uint8List byteImage = base64Decode(imageBase64);
-
+    final byteImage = base64Decode(imageBase64);
     final img_pkg.Image? img = img_pkg.decodeImage(byteImage);
-    if (img == null) {
-      return '';
-    }
+    if (img == null) return '';
 
     int newWidth = img.width;
     int newHeight = img.height;
@@ -216,7 +226,6 @@ mixin AppImageCompression {
     }
 
     final resizedData = img_pkg.encodeJpg(resizedImage, quality: quality);
-
     return base64Encode(resizedData);
   }
 }

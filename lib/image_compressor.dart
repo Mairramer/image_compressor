@@ -1,99 +1,79 @@
 import 'dart:async';
-import 'dart:ffi' as ffi;
 import 'dart:ffi';
 import 'dart:io';
 
 import 'package:ffi/ffi.dart';
 
-// final DynamicLibrary _dylib = () {
-//   if (Platform.isMacOS || Platform.isIOS) {
-//     return DynamicLibrary.open('libimage_compressor.dylib');
-//   } else if (Platform.isAndroid || Platform.isLinux) {
-//     return DynamicLibrary.open('libimage_compressor.so');
-//   } else if (Platform.isWindows) {
-//     return DynamicLibrary.open('image_compressor.dll');
-//   } else {
-//     throw UnsupportedError('Unsupported platform');
-//   }
-// }();
+/// Interface that defines the contract for image compression implementations.
+abstract class ImageCompressor {
+  /// Compresses an image from the given [path].
+  ///
+  /// [quality] specifies the compression quality (default 75).
+  /// [maxSize] specifies the maximum allowed dimension (width or height) of the image (default 1080).
+  ///
+  /// Returns a [Future] that completes with the compressed image encoded as a Base64 string.
+  Future<String> compressImageFromPath(String path, {int quality, int maxSize});
+}
 
-// final ImageCompressorBindings _bindings = ImageCompressorBindings(_dylib);
+/// Native implementation of [ImageCompressor] using Dart FFI.
+///
+/// This class loads the native library and binds to the native functions
+/// to perform image compression in native code.
+class NativeImageCompressor implements ImageCompressor {
+  late final DynamicLibrary _nativeLib;
 
-// class _CompressRequest {
-//   final SendPort replyPort;
-//   final String path;
-//   final int quality;
-//   final int maxSize;
+  // Native function pointers
+  late final Pointer<Utf8> Function(Pointer<Utf8>, int, int) _fromPath;
+  late final void Function(Pointer<Utf8>) _freeString;
 
-//   _CompressRequest(this.replyPort, this.path, this.quality, this.maxSize);
-// }
+  /// Constructs a [NativeImageCompressor] and loads the native library.
+  NativeImageCompressor() {
+    _nativeLib = _loadLibrary();
 
-// void _compressIsolateEntry(_CompressRequest request) {
-//   try {
-//     final Pointer<Utf8> pathUtf8 = request.path.toNativeUtf8();
-//     final Pointer<ffi.Char> pathChar = pathUtf8.cast<ffi.Char>();
-//     final resultPtr = _bindings.compress_image(pathChar, request.quality, request.maxSize);
-//     calloc.free(pathUtf8);
+    _fromPath = _nativeLib
+        .lookupFunction<
+          Pointer<Utf8> Function(Pointer<Utf8>, Int32, Int32),
+          Pointer<Utf8> Function(Pointer<Utf8>, int, int)
+        >('image_compressor_from_path');
 
-//     if (resultPtr == nullptr) {
-//       request.replyPort.send(Exception('Compressão falhou'));
-//       return;
-//     }
+    _freeString = _nativeLib.lookupFunction<Void Function(Pointer<Utf8>), void Function(Pointer<Utf8>)>(
+      'image_compressor_free_string',
+    );
+  }
 
-//     final compressed = resultPtr.cast<Utf8>().toDartString();
-//     _bindings.free_compressed_image(resultPtr);
-
-//     request.replyPort.send(compressed);
-//   } catch (e) {
-//     request.replyPort.send(e);
-//   }
-// }
-
-// /// Compressão de imagem com isolate interno para não travar UI.
-// /// [quality] entre 1 e 100 (padrão 75).
-// /// [maxSize] máxima largura ou altura para redimensionar (padrão 1080).
-// Future<String> compressImage(String path, {int quality = 75, int maxSize = 1080}) async {
-//   final receivePort = ReceivePort();
-//   final request = _CompressRequest(receivePort.sendPort, path, quality, maxSize);
-//   await Isolate.spawn(_compressIsolateEntry, request);
-//   final result = await receivePort.first;
-//   receivePort.close();
-
-//   if (result is Exception) {
-//     throw result;
-//   } else if (result is String) {
-//     return result;
-//   } else {
-//     throw Exception('Erro desconhecido na compressão');
-//   }
-// }
-
-final DynamicLibrary lib = Platform.isAndroid
-    ? DynamicLibrary.open('libimage_compressor.so')
-    : Platform.isIOS
-    ? DynamicLibrary.process()
-    : throw UnsupportedError('Unsupported platform');
-
-typedef CompressImageC = Pointer<Utf8> Function(Pointer<Utf8> path, Int32 quality, Int32 maxSize);
-typedef CompressImageD = Pointer<Utf8> Function(Pointer<Utf8> path, int quality, int maxSize);
-
-typedef FreeStringC = Void Function(Pointer<Utf8>);
-typedef FreeStringD = void Function(Pointer<Utf8>);
-
-final CompressImageD compressImage = lib.lookupFunction<CompressImageC, CompressImageD>('compress_image');
-final FreeStringD freeString = lib.lookupFunction<FreeStringC, FreeStringD>('free_compressed_image');
-
-Future<String> compressImageFromP(String path, {int quality = 70, int maxSize = 1080}) async {
-  final pathPtr = path.toNativeUtf8();
-  try {
-    final resultPtr = compressImage(pathPtr, quality, maxSize);
-    if (resultPtr == nullptr) {
-      throw Exception('Compressão falhou');
+  /// Loads the dynamic library according to the current platform.
+  ///
+  /// For Android, opens the shared object `.so` file.
+  /// For iOS, uses the process image since the library is embedded.
+  /// Throws [UnsupportedError] if the platform is not supported.
+  DynamicLibrary _loadLibrary() {
+    if (Platform.isAndroid) {
+      return DynamicLibrary.open('libimage_compressor.so');
+    } else if (Platform.isIOS) {
+      return DynamicLibrary.process();
+    } else {
+      throw UnsupportedError('Platform ${Platform.operatingSystem} is not supported.');
     }
-    final result = resultPtr.toDartString();
-    freeString(resultPtr);
-    return result;
-  } finally {
-    calloc.free(pathPtr);
+  }
+
+  @override
+  Future<String> compressImageFromPath(String path, {int quality = 75, int maxSize = 1080}) async {
+    if (path.isEmpty) {
+      throw ArgumentError('Image path cannot be empty.');
+    }
+    final Pointer<Utf8> pathPtr = path.toNativeUtf8();
+    try {
+      final Pointer<Utf8> resultPtr = _fromPath(pathPtr, quality, maxSize);
+
+      if (resultPtr == nullptr) {
+        throw Exception('Image compression failed: native returned null pointer.');
+      }
+
+      final String result = resultPtr.toDartString();
+      _freeString(resultPtr);
+      return result;
+    } finally {
+      calloc.free(pathPtr);
+    }
   }
 }
