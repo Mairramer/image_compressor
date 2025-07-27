@@ -40,7 +40,9 @@ flutter pub get
 ```dart
 import 'package:image_compressor/image_compressor.dart';
 
-final compressedBase64 = await image_compressor.compressImageFromP(
+final imageCompressor = ImageCompressor();
+
+final compressedBase64 = await imageCompressor.compressImageFromPath(
   '/path/to/image.jpg',
   quality: 70,
   maxSize: 1080,
