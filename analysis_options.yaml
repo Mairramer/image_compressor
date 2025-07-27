@@ -1,4 +1,70 @@
 include: package:flutter_lints/flutter.yaml
 
-# Additional information about this file can be found at
-# https://dart.dev/guides/language/analysis-options
+linter: 
+  rules: 
+    always_declare_return_types: true
+    depend_on_referenced_packages: false
+    prefer_relative_imports: true
+    prefer_const_constructors: true
+    prefer_final_locals: true
+    require_trailing_commas: false
+    sort_child_properties_last: true
+    use_named_constants: true
+    use_raw_strings: true
+    collection_methods_unrelated_type: true
+    avoid_returning_null_for_void: true
+    avoid_unnecessary_containers: true
+    lines_longer_than_80_chars: true
+    directives_ordering: true
+    sized_box_shrink_expand: true
+    use_decorated_box: true
+    use_colored_box: true
+    unnecessary_string_escapes: true
+    avoid_redundant_argument_values: true
+    prefer_single_quotes: true
+    avoid_escaping_inner_quotes: true
+    avoid_multiple_declarations_per_line: true
+    avoid_single_cascade_in_expression_statements: true
+    always_put_control_body_on_new_line: true
+    sort_unnamed_constructors_first: true
+    prefer_const_constructors_in_immutables: true
+    prefer_const_declarations: true
+    prefer_const_literals_to_create_immutables: true
+    unnecessary_breaks: true
+    unnecessary_getters_setters: true
+    unnecessary_const: true
+    unnecessary_constructor_name: true
+    use_build_context_synchronously: true
+    prefer_contains: true
+
+formatter:
+  page_width: 120
+  trailing_commas: preserve
+
+analyzer:
+  plugins:
+    - dart_code_metrics
+
+  exclude:
+    - lib/**/**/*.freezed.dart
+    - lib/**/**/**/**/*.freezed.dart
+    - lib/**/**/*.g.dart
+    - lib/**/**/**/**/*.g.dart
+    - lib/**/**/*.gr.dart
+    - lib/**/**/**/**/*.gr.dart
+    - lib/generated_plugin_registrant.dart
+    - copan/lib/**/*.doc_widget.dart
+
+  errors:
+    missing_return: error
+    public_member_api_docs: ignore
+    lines_longer_than_80_chars: ignore
+    no_logic_in_create_state: ignore
+
+dart_code_metrics:
+  metrics:
+    cyclomatic-complexity: 10
+    maximum-nesting-level: 5
+    source-lines-of-code: 60
+  metrics-exclude:
+    - test/**

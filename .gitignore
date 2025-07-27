@@ -1,0 +1,40 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.buildlog/
+.history
+.svn/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# External native build folder generated in Android Studio 2.2 and later
+.externalNativeBuild
+.cxx/
+
+
+# Flutter/Dart/Pub related
+**/doc/api/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+
+.fvm/
+.vscode/settings.json
+lib/common/layout/gen/assets.gen.dart
+
+# Coverage test result
+/coverage/
+/test/coverage_helper_test.dart
+coverage/lcov.info
+ios/Podfile.lock

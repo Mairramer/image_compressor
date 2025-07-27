@@ -11,12 +11,10 @@ import 'dart:ffi' as ffi;
 /// Bindings para `image_compressor.h`
 class ImageCompressorBindings {
   /// Holds the symbol lookup function.
-  final ffi.Pointer<T> Function<T extends ffi.NativeType>(String symbolName)
-  _lookup;
+  final ffi.Pointer<T> Function<T extends ffi.NativeType>(String symbolName) _lookup;
 
   /// The symbols are looked up in [dynamicLibrary].
-  ImageCompressorBindings(ffi.DynamicLibrary dynamicLibrary)
-    : _lookup = dynamicLibrary.lookup;
+  ImageCompressorBindings(ffi.DynamicLibrary dynamicLibrary) : _lookup = dynamicLibrary.lookup;
 
   /// The symbols are looked up with [lookup].
   ImageCompressorBindings.fromLookup(
@@ -50,19 +48,15 @@ class ImageCompressorBindings {
         >
       >('compress_image');
   late final _compress_image = _compress_imagePtr
-      .asFunction<
-        ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Char>, int, int)
-      >();
+      .asFunction<ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Char>, int, int)>();
 
   /// Frees the pointer returned by `compress_image`.
   void free_compressed_image(ffi.Pointer<ffi.Char> ptr) {
     return _free_compressed_image(ptr);
   }
 
-  late final _free_compressed_imagePtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Char>)>>(
-        'free_compressed_image',
-      );
-  late final _free_compressed_image = _free_compressed_imagePtr
-      .asFunction<void Function(ffi.Pointer<ffi.Char>)>();
+  late final _free_compressed_imagePtr = _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Char>)>>(
+    'free_compressed_image',
+  );
+  late final _free_compressed_image = _free_compressed_imagePtr.asFunction<void Function(ffi.Pointer<ffi.Char>)>();
 }

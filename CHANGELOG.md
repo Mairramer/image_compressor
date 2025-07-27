@@ -1,3 +1,5 @@
 ## 0.0.1
 
-* TODO: Describe initial release.
+- Initial release of the `image_compressor` Flutter FFI plugin.
+- Basic image compression support using native C++ libraries.
+- Support for Android and iOS platforms via FFI.
