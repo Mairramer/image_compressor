@@ -15,11 +15,13 @@ extern "C" {
  *                   Must be freed by calling `image_compressor_free_string`.
  *                   Returns nullptr on failure.
  */
+__attribute__((visibility("default")))
 char* image_compressor_from_path(const char* path, int quality, int max_size);
 
 /**
  * Frees any C string returned by `image_compressor_from_path`.
  */
+__attribute__((visibility("default")))
 void image_compressor_free_string(char* ptr);
 
 #ifdef __cplusplus
