@@ -11,13 +11,14 @@ accessible via FFI for both Android and iOS.
   s.author           = { 'Mairramer Veloso' => 'mairramer.dasilva28@hotmail.com' }
 
   s.source           = { :path => '.' }
-  s.source_files     = 'Classes/**/*'
+  s.source_files = 'Classes/**/*.{h,mm}'
   s.dependency       'Flutter'
   s.platform         = :ios, '12.0'
 
   s.pod_target_xcconfig = {
-    'DEFINES_MODULE' => 'YES',
-    'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386'
+  'DEFINES_MODULE' => 'YES',
+  'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17',
+  'CLANG_CXX_LIBRARY' => 'libc++'
   }
   s.swift_version = '5.0'
 end
