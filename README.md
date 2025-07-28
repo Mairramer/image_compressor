@@ -40,13 +40,15 @@ flutter pub get
 ```dart
 import 'package:image_compressor/image_compressor.dart';
 
-final imageCompressor = ImageCompressor();
+final imageCompressor = NativeImageCompressor();
 
 final compressedBase64 = await imageCompressor.compressImageFromPath(
   '/path/to/image.jpg',
   quality: 70,
-  maxSize: 1080,
+  maxWidth: 1080,
+  maxHeight: 1920,
 );
+
 ```
 
 This method returns the compressed image encoded as a base64 string.
