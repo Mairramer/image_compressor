@@ -9,10 +9,16 @@ abstract class ImageCompressor {
   /// Compresses an image from the given [path].
   ///
   /// [quality] specifies the compression quality (default 75).
-  /// [maxSize] specifies the maximum allowed dimension (width or height) of the image (default 1080).
+  /// [maxWidth] specifies the maximum width allowed (default 1080).
+  /// [maxHeight] specifies the maximum height allowed (default 1080).
   ///
   /// Returns a [Future] that completes with the compressed image encoded as a Base64 string.
-  Future<String> compressImageFromPath(String path, {int quality, int maxSize});
+  Future<String> compressImageFromPath(
+    String path, {
+    int quality = 75,
+    int maxWidth = 1080,
+    int maxHeight = 1080,
+  });
 }
 
 /// Native implementation of [ImageCompressor] using Dart FFI.
@@ -23,7 +29,7 @@ class NativeImageCompressor implements ImageCompressor {
   late final DynamicLibrary _nativeLib;
 
   // Native function pointers
-  late final Pointer<Utf8> Function(Pointer<Utf8>, int, int) _fromPath;
+  late final Pointer<Utf8> Function(Pointer<Utf8>, int, int, int) _fromPath;
   late final void Function(Pointer<Utf8>) _freeString;
 
   /// Constructs a [NativeImageCompressor] and loads the native library.
@@ -32,8 +38,8 @@ class NativeImageCompressor implements ImageCompressor {
 
     _fromPath = _nativeLib
         .lookupFunction<
-          Pointer<Utf8> Function(Pointer<Utf8>, Int32, Int32),
-          Pointer<Utf8> Function(Pointer<Utf8>, int, int)
+          Pointer<Utf8> Function(Pointer<Utf8>, Int32, Int32, Int32),
+          Pointer<Utf8> Function(Pointer<Utf8>, int, int, int)
         >('image_compressor_from_path');
 
     _freeString = _nativeLib.lookupFunction<Void Function(Pointer<Utf8>), void Function(Pointer<Utf8>)>(
@@ -57,13 +63,18 @@ class NativeImageCompressor implements ImageCompressor {
   }
 
   @override
-  Future<String> compressImageFromPath(String path, {int quality = 75, int maxSize = 1080}) async {
+  Future<String> compressImageFromPath(
+    String path, {
+    int quality = 75,
+    int maxWidth = 1080,
+    int maxHeight = 1080,
+  }) async {
     if (path.isEmpty) {
       throw ArgumentError('Image path cannot be empty.');
     }
     final Pointer<Utf8> pathPtr = path.toNativeUtf8();
     try {
-      final Pointer<Utf8> resultPtr = _fromPath(pathPtr, quality, maxSize);
+      final Pointer<Utf8> resultPtr = _fromPath(pathPtr, quality, maxWidth, maxHeight);
 
       if (resultPtr == nullptr) {
         throw Exception('Image compression failed: native returned null pointer.');

@@ -17,46 +17,50 @@ class ImageCompressorBindings {
   ImageCompressorBindings(ffi.DynamicLibrary dynamicLibrary) : _lookup = dynamicLibrary.lookup;
 
   /// The symbols are looked up with [lookup].
-  ImageCompressorBindings.fromLookup(
-    ffi.Pointer<T> Function<T extends ffi.NativeType>(String symbolName) lookup,
-  ) : _lookup = lookup;
+  ImageCompressorBindings.fromLookup(ffi.Pointer<T> Function<T extends ffi.NativeType>(String symbolName) lookup)
+    : _lookup = lookup;
 
-  /// Compress an image file located at `path` into a JPEG Base64 string.
+  /// Compress an image from a file path into a JPEG Base64 string.
   ///
   /// @param path       File path to the image.
   /// @param quality    JPEG quality (1-100).
   /// @param max_size   Maximum width or height for resizing. Use 0 for no resize.
   /// @return           Pointer to a null-terminated Base64 string allocated with malloc.
-  /// Must be freed by calling `free_compressed_image`.
+  /// Must be freed by calling `image_compressor_free_string`.
   /// Returns nullptr on failure.
-  ffi.Pointer<ffi.Char> compress_image(
+  ffi.Pointer<ffi.Char> image_compressor_from_path(
     ffi.Pointer<ffi.Char> path,
     int quality,
-    int max_size,
+    int max_width,
+    int max_height,
   ) {
-    return _compress_image(path, quality, max_size);
+    return _image_compressor_from_path(
+      path,
+      quality,
+      max_width,
+      max_height,
+    );
   }
 
-  late final _compress_imagePtr =
-      _lookup<
-        ffi.NativeFunction<
-          ffi.Pointer<ffi.Char> Function(
-            ffi.Pointer<ffi.Char>,
-            ffi.Int,
-            ffi.Int,
-          )
-        >
-      >('compress_image');
-  late final _compress_image = _compress_imagePtr
-      .asFunction<ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Char>, int, int)>();
+  late final _image_compressor_from_pathPtr =
+      _lookup<ffi.NativeFunction<ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Char>, ffi.Int, ffi.Int, ffi.Int)>>(
+        'image_compressor_from_path',
+      );
+  late final _image_compressor_from_path = _image_compressor_from_pathPtr
+      .asFunction<ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Char>, int, int, int)>();
 
-  /// Frees the pointer returned by `compress_image`.
-  void free_compressed_image(ffi.Pointer<ffi.Char> ptr) {
-    return _free_compressed_image(ptr);
+  /// Frees any C string returned by `image_compressor_from_path`.
+  void image_compressor_free_string(
+    ffi.Pointer<ffi.Char> ptr,
+  ) {
+    return _image_compressor_free_string(
+      ptr,
+    );
   }
 
-  late final _free_compressed_imagePtr = _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Char>)>>(
-    'free_compressed_image',
+  late final _image_compressor_free_stringPtr = _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Char>)>>(
+    'image_compressor_free_string',
   );
-  late final _free_compressed_image = _free_compressed_imagePtr.asFunction<void Function(ffi.Pointer<ffi.Char>)>();
+  late final _image_compressor_free_string = _image_compressor_free_stringPtr
+      .asFunction<void Function(ffi.Pointer<ffi.Char>)>();
 }

@@ -6,7 +6,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img_pkg;
-import 'package:image_compressor/image_compressor.dart'; // import interface and implementation
+import 'package:image_compressor/image_compressor.dart';
 import 'package:image_picker/image_picker.dart';
 
 void main() => runApp(const MyApp());
@@ -134,6 +134,7 @@ class _HomePageState extends State<HomePage> {
         padding: const EdgeInsets.all(16),
         child: SingleChildScrollView(
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               ElevatedButton.icon(
                 onPressed: _isProcessing ? null : _pickImage,
@@ -142,7 +143,8 @@ class _HomePageState extends State<HomePage> {
               ),
               if (_imageFile != null) ...[
                 const SizedBox(height: 16),
-                Image.file(_imageFile!, height: 150),
+
+                SizedBox(height: 200, child: InteractiveViewer(maxScale: 5.0, child: Image.file(_imageFile!))),
                 const SizedBox(height: 16),
                 ElevatedButton.icon(
                   onPressed: _isProcessing ? null : _benchmarkBoth,
@@ -159,13 +161,15 @@ class _HomePageState extends State<HomePage> {
               if (_dartOutput != null) ...[
                 const Text('Compressed Image - Dart', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
-                Image.memory(_dartOutput!, height: 150),
+
+                SizedBox(height: 200, child: InteractiveViewer(maxScale: 5.0, child: Image.memory(_dartOutput!))),
               ],
               if (_ffiOutput != null) ...[
                 const SizedBox(height: 16),
                 const Text('Compressed Image - FFI', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
-                Image.memory(_ffiOutput!, height: 150),
+
+                SizedBox(height: 200, child: InteractiveViewer(maxScale: 5.0, child: Image.memory(_ffiOutput!))),
               ],
             ],
           ),
