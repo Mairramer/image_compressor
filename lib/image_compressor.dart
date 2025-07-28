@@ -10,14 +10,16 @@ abstract class ImageCompressor {
   ///
   /// [quality] specifies the compression quality (default 75).
   /// [maxWidth] specifies the maximum width allowed (default 1080).
-  /// [maxHeight] specifies the maximum height allowed (default 1080).
+  /// [maxHeight] specifies the maximum height allowed (default 1920).
+  ///
+  /// Defaults are set for **portrait mode** images.
   ///
   /// Returns a [Future] that completes with the compressed image encoded as a Base64 string.
   Future<String> compressImageFromPath(
     String path, {
     int quality = 75,
     int maxWidth = 1080,
-    int maxHeight = 1080,
+    int maxHeight = 1920,
   });
 }
 
@@ -67,7 +69,7 @@ class NativeImageCompressor implements ImageCompressor {
     String path, {
     int quality = 75,
     int maxWidth = 1080,
-    int maxHeight = 1080,
+    int maxHeight = 1920,
   }) async {
     if (path.isEmpty) {
       throw ArgumentError('Image path cannot be empty.');
