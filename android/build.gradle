@@ -24,7 +24,7 @@ apply plugin: "com.android.library"
 android {
     namespace = "com.image_compressor"
     compileSdk = 35
-    ndkVersion = android.ndkVersion
+    ndkVersion "28.2.13676358"
 
     defaultConfig {
         minSdk = 21
