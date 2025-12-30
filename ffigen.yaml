@@ -6,7 +6,7 @@ output: lib/image_compressor_bindings_generated.dart
 
 headers:
   entry-points:
-    - 'src/image_compressor.h'    # caminho relativo ao seu projeto
+    - 'src/image_compressor.h'
   include-directives:
     - 'src/image_compressor.h'
 
