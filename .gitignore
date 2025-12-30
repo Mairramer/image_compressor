@@ -38,3 +38,4 @@ lib/common/layout/gen/assets.gen.dart
 /test/coverage_helper_test.dart
 coverage/lcov.info
 ios/Podfile.lock
+src/tests/build/

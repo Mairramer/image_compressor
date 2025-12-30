@@ -27,8 +27,10 @@ set(CMAKE_C_VISIBILITY_PRESET hidden)
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 set(CMAKE_VISIBILITY_INLINES_HIDDEN 1)
 
-target_include_directories(image_compressor PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
+target_include_directories(image_compressor
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party
 )
 
 if (ANDROID)

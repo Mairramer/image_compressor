@@ -19,7 +19,7 @@ TEST(CompressImageTest, InvalidFileReturnsNull) {
 }
 
 TEST(CompressImageTest, ValidImageBase64OutputWithSizeInfo) {
-    const char* image_path = "src/tests/test_assets/5mb.jpg";
+    const char* image_path = "../test_assets/5mb.jpg";
     size_t originalSize = getFileSize(image_path);
     ASSERT_GT(originalSize, 0u) << "Failed to get original file size";
 
@@ -37,7 +37,7 @@ TEST(CompressImageTest, ValidImageBase64OutputWithSizeInfo) {
 }
 
 TEST(CompressImageTest, QualityOutOfRangeHandled) {
-    const char* image_path = "src/tests/test_assets/5mb.jpg";
+    const char* image_path = "../test_assets/5mb.jpg";
 
     char* resultLow = image_compressor_from_path(image_path, -10, 1080, 1920);
     char* resultHigh = image_compressor_from_path(image_path, 200, 1080, 1920);
@@ -50,7 +50,7 @@ TEST(CompressImageTest, QualityOutOfRangeHandled) {
 }
 
 TEST(CompressImageTest, ResizeProperlyApplied) {
-    const char* image_path = "src/tests/test_assets/5mb.jpg";
+    const char* image_path = "../test_assets/5mb.jpg";
     char* result = image_compressor_from_path(image_path, 80, 480, 720);
     ASSERT_NE(result, nullptr);
 
