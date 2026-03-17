@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 
@@ -21,6 +22,20 @@ abstract class ImageCompressor {
     int maxWidth = 1080,
     int maxHeight = 1920,
   });
+
+  /// Compresses an image from the given [bytes].
+  ///
+  /// [quality] specifies the compression quality (default 75).
+  /// [maxWidth] specifies the maximum width allowed (default 1080).
+  /// [maxHeight] specifies the maximum height allowed (default 1920).
+  ///
+  /// Returns a [Future] that completes with the compressed image encoded as a Base64 string.
+  Future<String> compressImageFromBytes(
+    Uint8List bytes, {
+    int quality = 75,
+    int maxWidth = 1080,
+    int maxHeight = 1920,
+  });
 }
 
 /// Native implementation of [ImageCompressor] using Dart FFI.
@@ -32,6 +47,7 @@ class NativeImageCompressor implements ImageCompressor {
 
   // Native function pointers
   late final Pointer<Utf8> Function(Pointer<Utf8>, int, int, int) _fromPath;
+  late final Pointer<Utf8> Function(Pointer<Uint8>, int, int, int, int) _fromBytes;
   late final void Function(Pointer<Utf8>) _freeString;
 
   /// Constructs a [NativeImageCompressor] and loads the native library.
@@ -43,6 +59,12 @@ class NativeImageCompressor implements ImageCompressor {
           Pointer<Utf8> Function(Pointer<Utf8>, Int32, Int32, Int32),
           Pointer<Utf8> Function(Pointer<Utf8>, int, int, int)
         >('image_compressor_from_path');
+
+    _fromBytes = _nativeLib
+        .lookupFunction<
+          Pointer<Utf8> Function(Pointer<Uint8>, Int32, Int32, Int32, Int32),
+          Pointer<Utf8> Function(Pointer<Uint8>, int, int, int, int)
+        >('image_compressor_from_bytes');
 
     _freeString = _nativeLib.lookupFunction<Void Function(Pointer<Utf8>), void Function(Pointer<Utf8>)>(
       'image_compressor_free_string',
@@ -77,16 +99,53 @@ class NativeImageCompressor implements ImageCompressor {
     final Pointer<Utf8> pathPtr = path.toNativeUtf8();
     try {
       final Pointer<Utf8> resultPtr = _fromPath(pathPtr, quality, maxWidth, maxHeight);
-
-      if (resultPtr == nullptr) {
-        throw Exception('Image compression failed: native returned null pointer.');
-      }
-
-      final String result = resultPtr.toDartString();
-      _freeString(resultPtr);
-      return result;
+      return _processNativeResult(resultPtr);
     } finally {
       calloc.free(pathPtr);
+    }
+  }
+
+  @override
+  Future<String> compressImageFromBytes(
+    Uint8List bytes, {
+    int quality = 75,
+    int maxWidth = 1080,
+    int maxHeight = 1920,
+  }) async {
+    if (bytes.isEmpty) {
+      throw ArgumentError('Image bytes cannot be empty.');
+    }
+
+    final Pointer<Uint8> bytesPtr = malloc.allocate<Uint8>(bytes.length);
+    try {
+      bytesPtr.asTypedList(bytes.length).setAll(0, bytes);
+
+      final Pointer<Utf8> resultPtr = _fromBytes(
+        bytesPtr,
+        bytes.length,
+        quality,
+        maxWidth,
+        maxHeight,
+      );
+
+      return _processNativeResult(resultPtr);
+    } finally {
+      malloc.free(bytesPtr);
+    }
+  }
+
+  /// Processes the result from native code, converts it to a Dart string,
+  /// and frees the native memory.
+  String _processNativeResult(Pointer<Utf8> resultPtr) {
+    if (resultPtr == nullptr) {
+      throw Exception('Image compression failed: native returned null pointer.');
+    }
+
+    try {
+      final String result = resultPtr.toDartString();
+      return result;
+    } finally {
+      _freeString(resultPtr);
     }
   }
 }

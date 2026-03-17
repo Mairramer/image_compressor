@@ -14,7 +14,7 @@ A Flutter plugin that performs fast JPEG compression using C++ via FFI.
 
   # 💡 This is the key change.
   # It includes any files in `ios/Classes` AND all .h/.cpp files from the external `src` folder.
-  s.source_files = 'Classes/**/*.{h,m,mm}', '../src/**/*.{h,cpp}'
+  s.source_files = 'Classes/**/*.{h,m,mm}', '../src/**/*.{h,cpp}', '../third_party/stb/*.h'
 
   # 💡 Point the public header to its location in the `src` folder.
   s.public_header_files = '../src/image_compressor.h'
@@ -27,7 +27,7 @@ A Flutter plugin that performs fast JPEG compression using C++ via FFI.
     'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17',
     'CLANG_CXX_LIBRARY' => 'libc++',
     # This helps Xcode find headers like "stb_image.h" from your .cpp file
-    'HEADER_SEARCH_PATHS' => '"$(PODS_TARGET_SRCROOT)/src"'
+    'HEADER_SEARCH_PATHS' => '"$(PODS_TARGET_SRCROOT)/../src" "$(PODS_TARGET_SRCROOT)/../third_party"'
   }
   s.swift_version = '5.0'
 end

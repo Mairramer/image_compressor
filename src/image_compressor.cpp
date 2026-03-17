@@ -488,3 +488,65 @@ extern "C" char* image_compressor_from_path(const char* path, int quality, int m
 extern "C" void image_compressor_free_string(char* ptr) {
     free(ptr);
 }
+
+
+/**
+ * @brief Implementation to compress from a memory buffer (Uint8List).
+ */
+extern "C" char* image_compressor_from_bytes(const uint8_t* input_bytes, int input_size, int quality, int max_width, int max_height) {
+    if (!input_bytes || input_size <= 0) return nullptr;
+
+    if (quality < 1) quality = 1;
+    if (quality > 100) quality = 100;
+
+    int width, height, channels;
+    // Load the image from bytes (PNG, JPG, etc.) sent by Flutter
+    unsigned char* img = stbi_load_from_memory(input_bytes, input_size, &width, &height, &channels, 0);
+    if (!img) return nullptr;
+
+    // Since bytes come from Flutter Canvas (already rotated),
+    // we ignore EXIF logic here.
+    int w = width;
+    int h = height;
+
+    // Resize logic (Maintaining fit_inside_box implementation)
+    int new_w = w;
+    int new_h = h;
+    if (max_width > 0 || max_height > 0) {
+        int limit_w = (max_width > 0) ? max_width : w;
+        int limit_h = (max_height > 0) ? max_height : h;
+        fit_inside_box(w, h, limit_w, limit_h, new_w, new_h);
+    }
+
+    const unsigned char* img_to_use = img;
+    std::vector<unsigned char> resized_image;
+
+    if (new_w != w || new_h != h) {
+        if (!resize_image(img, w, h, channels, resized_image, new_w, new_h)) {
+            stbi_image_free(img);
+            return nullptr;
+        }
+        img_to_use = resized_image.data();
+        w = new_w;
+        h = new_h;
+    }
+
+    // Compression to JPEG in memory
+    std::vector<unsigned char> jpeg_buffer;
+    bool success = compress_to_jpeg_buffer(img_to_use, w, h, channels, quality, jpeg_buffer);
+    
+    stbi_image_free(img); // Free the original stbi buffer
+    if (!success) return nullptr;
+
+    // Encode to Base64
+    std::string base64 = base64_encode(jpeg_buffer.data(), jpeg_buffer.size());
+    
+    // Allocate memory for return (Dart is responsible for calling free_string)
+    char* result = (char*)malloc(base64.size() + 1);
+    if (!result) return nullptr;
+
+    std::memcpy(result, base64.c_str(), base64.size());
+    result[base64.size()] = '\0';
+
+    return result;
+}

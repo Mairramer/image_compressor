@@ -6,6 +6,19 @@ extern "C" {
 #endif
 
 /**
+ * Compresses an image from a byte buffer (Uint8List from Dart).
+ *
+ * @param input_bytes Pointer to the input buffer.
+ * @param input_size  Size of the input buffer in bytes.
+ * @param quality     JPEG quality (1-100).
+ * @param max_width   Maximum width (0 to keep original size).
+ * @param max_height  Maximum height (0 to keep original size).
+ * @return            Base64 string allocated with malloc. Must be freed using image_compressor_free_string.
+ */
+__attribute__((visibility("default")))
+char* image_compressor_from_bytes(const uint8_t* input_bytes, int input_size, int quality, int max_width, int max_height);
+
+/**
  * Compress an image from a file path into a JPEG Base64 string.
  * 
  * @param path       File path to the image.
