@@ -21,6 +21,7 @@
 #include "image_compressor.h"
 #include <cstring>
 #include <vector>
+#include <cstdint>
 #include <cstdlib> // malloc, free
 
 #define STB_IMAGE_IMPLEMENTATION
