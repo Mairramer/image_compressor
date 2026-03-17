@@ -1,6 +1,8 @@
 #ifndef IMAGE_COMPRESSOR_H
 #define IMAGE_COMPRESSOR_H
 
+#include <cstdint>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
