@@ -96,10 +96,16 @@ class NativeImageCompressor implements ImageCompressor {
     if (path.isEmpty) {
       throw ArgumentError('Image path cannot be empty.');
     }
+
+    final file = File(path);
+    if (!file.existsSync()) {
+      throw ArgumentError('Image file does not exist at path: $path');
+    }
+
     final Pointer<Utf8> pathPtr = path.toNativeUtf8();
     try {
       final Pointer<Utf8> resultPtr = _fromPath(pathPtr, quality, maxWidth, maxHeight);
-      return _processNativeResult(resultPtr);
+      return _processNativeResult(resultPtr, context: 'compressImageFromPath(path: $path)');
     } finally {
       calloc.free(pathPtr);
     }
@@ -128,7 +134,7 @@ class NativeImageCompressor implements ImageCompressor {
         maxHeight,
       );
 
-      return _processNativeResult(resultPtr);
+      return _processNativeResult(resultPtr, context: 'compressImageFromBytes(length: ${bytes.length})');
     } finally {
       malloc.free(bytesPtr);
     }
@@ -136,13 +142,25 @@ class NativeImageCompressor implements ImageCompressor {
 
   /// Processes the result from native code, converts it to a Dart string,
   /// and frees the native memory.
-  String _processNativeResult(Pointer<Utf8> resultPtr) {
+  ///
+  /// [context] is an optional description included in the error message
+  /// to help identify which call failed.
+  String _processNativeResult(Pointer<Utf8> resultPtr, {String? context}) {
     if (resultPtr == nullptr) {
-      throw Exception('Image compression failed: native returned null pointer.');
+      final where = context != null ? ' [$context]' : '';
+      throw Exception(
+        'Image compression failed: native returned null pointer.$where '
+        'Possible causes: file not found, unsupported image format, '
+        'out-of-memory, or resize/JPEG encoding failure.',
+      );
     }
 
     try {
       final String result = resultPtr.toDartString();
+      if (result.isEmpty) {
+        final where = context != null ? ' [$context]' : '';
+        throw Exception('Image compression failed: native returned an empty string.$where');
+      }
       return result;
     } finally {
       _freeString(resultPtr);
