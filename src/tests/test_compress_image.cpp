@@ -58,3 +58,30 @@ TEST(CompressImageTest, ResizeProperlyApplied) {
     EXPECT_FALSE(base64.empty());
     image_compressor_free_string(result);
 }
+
+TEST(CompressImageTest, GoldenTest) {
+    const char* image_path = "../test_assets/5mb.jpg";
+    const char* golden_path = "../test_assets/5mb_golden.txt";
+
+    // Compress with specific parameters to ensure deterministic output
+    char* result = image_compressor_from_path(image_path, 80, 480, 720);
+    ASSERT_NE(result, nullptr);
+
+    std::string base64(result);
+    image_compressor_free_string(result);
+
+    std::ifstream golden_in(golden_path);
+    if (!golden_in.is_open() || std::getenv("UPDATE_GOLDENS")) {
+        // Generate or update golden file
+        std::ofstream golden_out(golden_path);
+        ASSERT_TRUE(golden_out.is_open()) << "Failed to write golden file.";
+        golden_out << base64;
+        golden_out.close();
+        std::cout << "Golden file generated/updated at " << golden_path << "\n";
+    } else {
+        // Compare with golden file
+        std::string expected_base64((std::istreambuf_iterator<char>(golden_in)),
+                                     std::istreambuf_iterator<char>());
+        EXPECT_EQ(base64, expected_base64) << "Compressed base64 output does not match golden file!";
+    }
+}
