@@ -54,6 +54,13 @@ analyzer:
     - lib/**/**/**/**/*.gr.dart
     - lib/generated_plugin_registrant.dart
     - copan/lib/**/*.doc_widget.dart
+    - build/**
+    - android/**
+    - ios/**
+    - web/**
+    - windows/**
+    - macos/**
+    - linux/**
 
   errors:
     missing_return: error
