@@ -20,9 +20,9 @@ extern "C" {
  *         image_compressor_free_string.
  */
 __attribute__((visibility("default"))) char* image_compressor_from_bytes(const uint8_t* input_bytes,
-                                                                        int input_size,
-                                                                        int quality, int max_width,
-                                                                        int max_height);
+                                                                         int input_size,
+                                                                         int quality, int max_width,
+                                                                         int max_height);
 
 /**
  * Compress an image from a file path into a JPEG Base64 string.
@@ -36,8 +36,8 @@ __attribute__((visibility("default"))) char* image_compressor_from_bytes(const u
  *         Returns nullptr on failure.
  */
 __attribute__((visibility("default"))) char* image_compressor_from_path(const char* path,
-                                                                       int quality, int max_width,
-                                                                       int max_height);
+                                                                        int quality, int max_width,
+                                                                        int max_height);
 
 /**
  * Frees any C string returned by `image_compressor_from_path` or

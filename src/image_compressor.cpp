@@ -202,8 +202,8 @@ static uint16_t read_uint16(const uint8_t* data, bool big_endian) {
 
 static uint32_t read_uint32(const uint8_t* data, bool big_endian) {
     if (big_endian) {
-        return (uint32_t(data[0]) << 24) | (uint32_t(data[1]) << 16) |
-               (uint32_t(data[2]) << 8) | uint32_t(data[3]);
+        return (uint32_t(data[0]) << 24) | (uint32_t(data[1]) << 16) | (uint32_t(data[2]) << 8) |
+               uint32_t(data[3]);
     }
     return uint32_t(data[0]) | (uint32_t(data[1]) << 8) | (uint32_t(data[2]) << 16) |
            (uint32_t(data[3]) << 24);
