@@ -1,9 +1,10 @@
 #include <gtest/gtest.h>
-#include <string>
+
 #include <fstream>
 #include <iostream>
-#include "image_compressor.h"
+#include <string>
 
+#include "image_compressor.h"
 
 size_t getFileSize(const char* path) {
     std::ifstream in(path, std::ifstream::ate | std::ifstream::binary);
@@ -23,7 +24,7 @@ TEST(CompressImageTest, ValidImageBase64OutputWithSizeInfo) {
     size_t originalSize = getFileSize(image_path);
     ASSERT_GT(originalSize, 0u) << "Failed to get original file size";
 
-    char* result = image_compressor_from_path(image_path, 85,1080, 1920);
+    char* result = image_compressor_from_path(image_path, 85, 1080, 1920);
     ASSERT_NE(result, nullptr);
 
     std::string base64(result);
@@ -81,7 +82,12 @@ TEST(CompressImageTest, GoldenTest) {
     } else {
         // Compare with golden file
         std::string expected_base64((std::istreambuf_iterator<char>(golden_in)),
-                                     std::istreambuf_iterator<char>());
-        EXPECT_EQ(base64, expected_base64) << "Compressed base64 output does not match golden file!";
+                                    std::istreambuf_iterator<char>());
+        while (!expected_base64.empty() &&
+               std::isspace(static_cast<unsigned char>(expected_base64.back()))) {
+            expected_base64.pop_back();
+        }
+        EXPECT_EQ(base64, expected_base64)
+            << "Compressed base64 output does not match golden file!";
     }
 }
