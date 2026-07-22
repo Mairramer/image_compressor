@@ -1,35 +1,16 @@
 PODS:
   - Flutter (1.0.0)
-  - image_compressor (0.0.1):
-    - Flutter
-  - image_picker_ios (0.0.1):
-    - Flutter
 
 DEPENDENCIES:
   - Flutter (from `Flutter`)
-  - image_compressor (from `.symlinks/plugins/image_compressor/ios`)
-  - image_picker_ios (from `.symlinks/plugins/image_picker_ios/ios`)
 
 EXTERNAL SOURCES:
   Flutter:
     :path: Flutter
-  image_compressor:
-    :path: ".symlinks/plugins/image_compressor/ios"
-  image_picker_ios:
-    :path: ".symlinks/plugins/image_picker_ios/ios"
 
 SPEC CHECKSUMS:
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
-<<<<<<< HEAD
-  image_compressor: b681aa2c363cefc2371b490b3ba77f2d9a25e7d5
-  image_picker_ios: 7fe1ff8e34c1790d6fff70a32484959f563a928a
-
-PODFILE CHECKSUM: 251cb053df7158f337c0712f2ab29f4e0fa474ce
-=======
-  image_compressor: f8214fbb53b1b7d0cfb5136153cb6d67bf07307c
-  image_picker_ios: 7fe1ff8e34c1790d6fff70a32484959f563a928a
 
 PODFILE CHECKSUM: 35eee708bf09880dead14bbc4da116af51a11f0b
->>>>>>> master
 
 COCOAPODS: 1.16.2
