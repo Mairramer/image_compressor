@@ -1,8 +1,12 @@
 #include <gtest/gtest.h>
 
+#include <cstdint>
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <string>
+#include <vector>
 
 #include "image_compressor.h"
 
@@ -11,12 +15,52 @@ size_t getFileSize(const char* path) {
     return in.is_open() ? static_cast<size_t>(in.tellg()) : 0;
 }
 
+std::vector<uint8_t> readFileBytes(const char* path) {
+    std::ifstream input(path, std::ios::binary);
+    return std::vector<uint8_t>(std::istreambuf_iterator<char>(input),
+                                std::istreambuf_iterator<char>());
+}
+
 TEST(CompressImageTest, NullPathReturnsNull) {
     EXPECT_EQ(image_compressor_from_path(nullptr, 75, 1080, 1920), nullptr);
 }
 
 TEST(CompressImageTest, InvalidFileReturnsNull) {
     EXPECT_EQ(image_compressor_from_path("invalid_path.jpg", 75, 1080, 1920), nullptr);
+}
+
+TEST(CompressImageTest, InvalidByteInputsReturnNull) {
+    const uint8_t invalid_bytes[] = {0x00, 0x01, 0x02, 0x03};
+
+    EXPECT_EQ(image_compressor_from_bytes(nullptr, 4, 75, 1080, 1920), nullptr);
+    EXPECT_EQ(image_compressor_from_bytes(invalid_bytes, 0, 75, 1080, 1920), nullptr);
+    EXPECT_EQ(image_compressor_from_bytes(invalid_bytes, 4, 75, 1080, 1920), nullptr);
+}
+
+TEST(CompressImageTest, PathAndBytesProduceSameOutput) {
+    const char* image_path = "../test_assets/5mb.jpg";
+    const std::vector<uint8_t> bytes = readFileBytes(image_path);
+    ASSERT_FALSE(bytes.empty());
+
+    char* path_result = image_compressor_from_path(image_path, 80, 480, 720);
+    char* bytes_result =
+        image_compressor_from_bytes(bytes.data(), static_cast<int>(bytes.size()), 80, 480, 720);
+
+    ASSERT_NE(path_result, nullptr);
+    ASSERT_NE(bytes_result, nullptr);
+    EXPECT_STREQ(path_result, bytes_result);
+
+    image_compressor_free_string(path_result);
+    image_compressor_free_string(bytes_result);
+}
+
+TEST(CompressImageTest, TinyBoundsNeverProduceZeroDimension) {
+    const char* image_path = "../test_assets/5mb.jpg";
+    char* result = image_compressor_from_path(image_path, 75, 1, 1);
+
+    ASSERT_NE(result, nullptr);
+    EXPECT_NE(result[0], '\0');
+    image_compressor_free_string(result);
 }
 
 TEST(CompressImageTest, ValidImageBase64OutputWithSizeInfo) {

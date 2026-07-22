@@ -22,8 +22,10 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>  // malloc, free
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -117,8 +119,26 @@ static void write_jpg_to_vector(void* context, void* data, int size) {
  * @return true on success, false if the channel count is unsupported or the
  *         resize library returns an error.
  */
+static bool calculate_buffer_size(int width, int height, int channels, size_t& size) {
+    if (width <= 0 || height <= 0 || channels <= 0) return false;
+
+    const size_t width_size = static_cast<size_t>(width);
+    const size_t height_size = static_cast<size_t>(height);
+    const size_t channel_size = static_cast<size_t>(channels);
+    const size_t max_size = std::numeric_limits<size_t>::max();
+
+    if (width_size > max_size / height_size) return false;
+    const size_t pixel_count = width_size * height_size;
+    if (pixel_count > max_size / channel_size) return false;
+
+    size = pixel_count * channel_size;
+    return true;
+}
+
 static bool resize_image(const unsigned char* input, int input_w, int input_h, int channels,
                          std::vector<unsigned char>& output, int output_w, int output_h) {
+    if (!input) return false;
+
     stbir_pixel_layout layout;
     switch (channels) {
         case 1:
@@ -137,7 +157,9 @@ static bool resize_image(const unsigned char* input, int input_w, int input_h, i
             return false;
     }
 
-    output.resize(static_cast<size_t>(output_w) * output_h * channels);
+    size_t output_size = 0;
+    if (!calculate_buffer_size(output_w, output_h, channels, output_size)) return false;
+    output.resize(output_size);
 
     unsigned char* result = stbir_resize_uint8_srgb(input, input_w, input_h, 0, output.data(),
                                                     output_w, output_h, 0, layout);
@@ -169,99 +191,149 @@ static bool compress_to_jpeg_buffer(const unsigned char* image_data, int width, 
  * @param filename Path to the JPEG file.
  * @return Orientation value 1–8, or 1 if unavailable.
  */
-static int read_exif_orientation(const char* filename) {
-    FILE* f = fopen(filename, "rb");
-    if (!f) return 1;
+static bool marker_has_no_payload(uint8_t marker) {
+    return marker == 0x01 || (marker >= 0xD0 && marker <= 0xD7);
+}
 
-    // Verify JPEG SOI marker.
-    uint8_t marker[2];
-    if (fread(marker, 1, 2, f) != 2 || marker[0] != 0xFF || marker[1] != 0xD8) {
-        fclose(f);
+static uint16_t read_uint16(const uint8_t* data, bool big_endian) {
+    return big_endian ? static_cast<uint16_t>((data[0] << 8) | data[1])
+                      : static_cast<uint16_t>(data[0] | (data[1] << 8));
+}
+
+static uint32_t read_uint32(const uint8_t* data, bool big_endian) {
+    if (big_endian) {
+        return (uint32_t(data[0]) << 24) | (uint32_t(data[1]) << 16) |
+               (uint32_t(data[2]) << 8) | uint32_t(data[3]);
+    }
+    return uint32_t(data[0]) | (uint32_t(data[1]) << 8) | (uint32_t(data[2]) << 16) |
+           (uint32_t(data[3]) << 24);
+}
+
+/**
+ * Parses a JPEG APP1 payload. Returns true when the payload is EXIF, even if
+ * the orientation tag is missing or malformed. In that case orientation stays 1.
+ */
+static bool parse_exif_app1(const uint8_t* payload, size_t payload_size, int& orientation) {
+    orientation = 1;
+    if (!payload || payload_size < 14 || std::memcmp(payload, "Exif\0\0", 6) != 0) {
+        return false;
+    }
+
+    const uint8_t* tiff = payload + 6;
+    const size_t tiff_size = payload_size - 6;
+
+    bool big_endian;
+    if (std::memcmp(tiff, "MM", 2) == 0) {
+        big_endian = true;
+    } else if (std::memcmp(tiff, "II", 2) == 0) {
+        big_endian = false;
+    } else {
+        return true;
+    }
+
+    if (read_uint16(tiff + 2, big_endian) != 42) return true;
+
+    const size_t ifd0_offset = read_uint32(tiff + 4, big_endian);
+    if (ifd0_offset > tiff_size || tiff_size - ifd0_offset < 2) return true;
+
+    const uint8_t* ifd0 = tiff + ifd0_offset;
+    const uint16_t declared_entries = read_uint16(ifd0, big_endian);
+    const size_t available_entries = (tiff_size - ifd0_offset - 2) / 12;
+    const size_t entries = std::min<size_t>(declared_entries, available_entries);
+
+    const uint8_t* entry = ifd0 + 2;
+    for (size_t index = 0; index < entries; ++index, entry += 12) {
+        if (read_uint16(entry, big_endian) != 0x0112) continue;
+
+        const uint16_t format = read_uint16(entry + 2, big_endian);
+        const uint32_t components = read_uint32(entry + 4, big_endian);
+        if (format == 3 && components == 1) {
+            const uint16_t value = read_uint16(entry + 8, big_endian);
+            if (value >= 1 && value <= 8) orientation = value;
+        }
+        break;
+    }
+
+    return true;
+}
+
+static int read_exif_orientation(const char* filename) {
+    std::unique_ptr<FILE, decltype(&fclose)> file(fopen(filename, "rb"), fclose);
+    if (!file) return 1;
+
+    uint8_t marker_bytes[2];
+    if (fread(marker_bytes, 1, 2, file.get()) != 2 || marker_bytes[0] != 0xFF ||
+        marker_bytes[1] != 0xD8) {
         return 1;
     }
 
-    int orientation = 1;
+    while (true) {
+        int prefix = fgetc(file.get());
+        if (prefix == EOF || prefix != 0xFF) break;
 
-    while (!feof(f)) {
-        if (fread(marker, 1, 2, f) != 2) break;
-        if (marker[0] != 0xFF) break;
+        int marker_value;
+        do {
+            marker_value = fgetc(file.get());
+        } while (marker_value == 0xFF);
 
-        uint8_t segment_type = marker[1];
+        if (marker_value == EOF) break;
+        const uint8_t marker = static_cast<uint8_t>(marker_value);
+        if (marker == 0x00) continue;
+        if (marker == 0xD9 || marker == 0xDA) break;
+        if (marker_has_no_payload(marker)) continue;
 
-        uint8_t size_buf[2];
-        if (fread(size_buf, 1, 2, f) != 2) break;
-        uint16_t segment_size = static_cast<uint16_t>((size_buf[0] << 8) | size_buf[1]);
-
-        // segment_size includes the 2 size bytes themselves; payload = size - 2.
+        uint8_t size_bytes[2];
+        if (fread(size_bytes, 1, 2, file.get()) != 2) break;
+        const uint16_t segment_size = static_cast<uint16_t>((size_bytes[0] << 8) | size_bytes[1]);
         if (segment_size < 2) break;
-        uint16_t payload_size = segment_size - 2;
 
-        if (segment_type == 0xE1) {  // APP1 — may contain EXIF
-            // Allocate with null check.
-            std::vector<uint8_t> data(payload_size);
-            if (fread(data.data(), 1, payload_size, f) != payload_size) break;
+        const size_t payload_size = segment_size - 2;
+        if (marker == 0xE1) {
+            std::vector<uint8_t> payload(payload_size);
+            if (fread(payload.data(), 1, payload_size, file.get()) != payload_size) break;
 
-            // Need at least "Exif\0\0" (6) + TIFF header (8) to be useful.
-            if (payload_size < 14) break;
-            if (memcmp(data.data(), "Exif\0\0", 6) != 0) break;
-
-            const uint8_t* tiff = data.data() + 6;
-            const size_t tiff_size = payload_size - 6;
-
-            bool is_be = false;
-            if (memcmp(tiff, "MM", 2) == 0)
-                is_be = true;
-            else if (memcmp(tiff, "II", 2) == 0)
-                is_be = false;
-            else
-                break;
-
-            auto read16 = [&](const uint8_t* p) -> uint16_t {
-                return is_be ? static_cast<uint16_t>((p[0] << 8) | p[1])
-                             : static_cast<uint16_t>(p[0] | (p[1] << 8));
-            };
-            auto read32 = [&](const uint8_t* p) -> uint32_t {
-                return is_be ? (uint32_t(p[0]) << 24) | (uint32_t(p[1]) << 16) |
-                                   (uint32_t(p[2]) << 8) | p[3]
-                             : uint32_t(p[0]) | (uint32_t(p[1]) << 8) | (uint32_t(p[2]) << 16) |
-                                   (uint32_t(p[3]) << 24);
-            };
-
-            // Bounds-check the IFD0 offset (offset is relative to start of TIFF header).
-            uint32_t ifd0_offset = read32(tiff + 4);
-            // IFD entry list needs: 2-byte count + at least 1 × 12-byte entry.
-            if (ifd0_offset + 2 + 12 > tiff_size) break;
-
-            const uint8_t* ifd0 = tiff + ifd0_offset;
-            uint16_t entries = read16(ifd0);
-            const uint8_t* entry_ptr = ifd0 + 2;
-
-            // Validate that all entries fit within the buffer.
-            if (ifd0_offset + 2 + static_cast<uint32_t>(entries) * 12 > tiff_size) {
-                entries = static_cast<uint16_t>((tiff_size - ifd0_offset - 2) / 12);
-            }
-
-            for (uint16_t i = 0; i < entries; ++i, entry_ptr += 12) {
-                uint16_t tag = read16(entry_ptr);
-                if (tag == 0x0112) {  // Orientation
-                    uint16_t format = read16(entry_ptr + 2);
-                    uint32_t components = read32(entry_ptr + 4);
-                    if (format == 3 && components == 1) {  // SHORT, 1 value
-                        uint16_t val = read16(entry_ptr + 8);
-                        if (val >= 1 && val <= 8) orientation = val;
-                    }
-                    break;  // Found the tag; no need to scan further.
-                }
-            }
-            break;  // APP1 processed.
-        } else {
-            // Skip this segment's payload.
-            if (fseek(f, payload_size, SEEK_CUR) != 0) break;
+            int orientation = 1;
+            if (parse_exif_app1(payload.data(), payload.size(), orientation)) return orientation;
+            continue;
         }
+
+        if (fseek(file.get(), static_cast<long>(payload_size), SEEK_CUR) != 0) break;
     }
 
-    fclose(f);
-    return orientation;
+    return 1;
+}
+
+static int read_exif_orientation(const uint8_t* bytes, size_t size) {
+    if (!bytes || size < 4 || bytes[0] != 0xFF || bytes[1] != 0xD8) return 1;
+
+    size_t offset = 2;
+    while (offset < size) {
+        if (bytes[offset++] != 0xFF) break;
+        while (offset < size && bytes[offset] == 0xFF) ++offset;
+        if (offset >= size) break;
+
+        const uint8_t marker = bytes[offset++];
+        if (marker == 0x00) continue;
+        if (marker == 0xD9 || marker == 0xDA) break;
+        if (marker_has_no_payload(marker)) continue;
+        if (size - offset < 2) break;
+
+        const uint16_t segment_size =
+            static_cast<uint16_t>((bytes[offset] << 8) | bytes[offset + 1]);
+        offset += 2;
+        if (segment_size < 2) break;
+
+        const size_t payload_size = segment_size - 2;
+        if (payload_size > size - offset) break;
+
+        if (marker == 0xE1) {
+            int orientation = 1;
+            if (parse_exif_app1(bytes + offset, payload_size, orientation)) return orientation;
+        }
+        offset += payload_size;
+    }
+
+    return 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -269,65 +341,72 @@ static int read_exif_orientation(const char* filename) {
 // ---------------------------------------------------------------------------
 
 /**
- * @brief Rotates an image 90 degrees clockwise.
- *
- * Output dimensions are height × width (transposed).
+ * @brief Returns whether an EXIF orientation swaps width and height.
  */
-static void rotate90(const unsigned char* src, unsigned char* dst, int width, int height,
-                     int channels) {
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            const int src_i = (y * width + x) * channels;
-            const int dst_i = (x * height + (height - y - 1)) * channels;
-            std::memcpy(dst + dst_i, src + src_i, channels);
-        }
-    }
+static bool orientation_swaps_dimensions(int orientation) {
+    return orientation >= 5 && orientation <= 8;
 }
 
 /**
- * @brief Rotates an image 180 degrees in-place (src → dst, same dimensions).
- *
- * Pixels are reversed end-to-end in steps of `channels` so that
- * individual channel bytes within each pixel are preserved correctly.
+ * Applies all eight EXIF orientation values. Source and destination must not overlap.
  */
-static void rotate180(const unsigned char* src, unsigned char* dst, int width, int height,
-                      int channels) {
-    const int total_pixels = width * height;
-    for (int i = 0; i < total_pixels; ++i) {
-        const int src_i = i * channels;
-        const int dst_i = (total_pixels - 1 - i) * channels;
-        std::memcpy(dst + dst_i, src + src_i, channels);
+static bool apply_orientation(const unsigned char* source, unsigned char* destination, int width,
+                              int height, int channels, int orientation) {
+    if (!source || !destination) return false;
+    if (width <= 0 || height <= 0 || channels <= 0 || orientation < 1 || orientation > 8) {
+        return false;
     }
-}
 
-/**
- * @brief Rotates an image 270 degrees clockwise.
- *
- * Output dimensions are height × width (transposed).
- */
-static void rotate270(const unsigned char* src, unsigned char* dst, int width, int height,
-                      int channels) {
+    const size_t output_width =
+        static_cast<size_t>(orientation_swaps_dimensions(orientation) ? height : width);
+
     for (int y = 0; y < height; ++y) {
         for (int x = 0; x < width; ++x) {
-            const int src_i = (y * width + x) * channels;
-            const int dst_i = ((width - x - 1) * height + y) * channels;
-            std::memcpy(dst + dst_i, src + src_i, channels);
-        }
-    }
-}
+            int destination_x = x;
+            int destination_y = y;
 
-/**
- * @brief Flips an image horizontally (mirror left ↔ right).
- */
-static void flip_horizontal(const unsigned char* src, unsigned char* dst, int width, int height,
-                            int channels) {
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            const int src_i = (y * width + x) * channels;
-            const int dst_i = (y * width + (width - x - 1)) * channels;
-            std::memcpy(dst + dst_i, src + src_i, channels);
+            switch (orientation) {
+                case 2:  // Mirror horizontally.
+                    destination_x = width - 1 - x;
+                    break;
+                case 3:  // Rotate 180 degrees.
+                    destination_x = width - 1 - x;
+                    destination_y = height - 1 - y;
+                    break;
+                case 4:  // Mirror vertically.
+                    destination_y = height - 1 - y;
+                    break;
+                case 5:  // Transpose across the top-left/bottom-right diagonal.
+                    destination_x = y;
+                    destination_y = x;
+                    break;
+                case 6:  // Rotate 90 degrees clockwise.
+                    destination_x = height - 1 - y;
+                    destination_y = x;
+                    break;
+                case 7:  // Transpose across the top-right/bottom-left diagonal.
+                    destination_x = height - 1 - y;
+                    destination_y = width - 1 - x;
+                    break;
+                case 8:  // Rotate 270 degrees clockwise.
+                    destination_x = y;
+                    destination_y = width - 1 - x;
+                    break;
+                default:
+                    break;
+            }
+
+            const size_t source_index =
+                (static_cast<size_t>(y) * width + x) * static_cast<size_t>(channels);
+            const size_t destination_index =
+                (static_cast<size_t>(destination_y) * output_width + destination_x) *
+                static_cast<size_t>(channels);
+            std::memcpy(destination + destination_index, source + source_index,
+                        static_cast<size_t>(channels));
         }
     }
+
+    return true;
 }
 
 /**
@@ -336,16 +415,22 @@ static void flip_horizontal(const unsigned char* src, unsigned char* dst, int wi
  */
 static void fit_inside_box(int original_w, int original_h, int max_w, int max_h, int& out_w,
                            int& out_h) {
-    const float ratio_w = static_cast<float>(max_w) / original_w;
-    const float ratio_h = static_cast<float>(max_h) / original_h;
-    const float ratio = (ratio_w < ratio_h) ? ratio_w : ratio_h;
+    if (original_w <= 0 || original_h <= 0 || max_w <= 0 || max_h <= 0) {
+        out_w = 0;
+        out_h = 0;
+        return;
+    }
 
-    if (ratio >= 1.0f) {
+    const double ratio_w = static_cast<double>(max_w) / original_w;
+    const double ratio_h = static_cast<double>(max_h) / original_h;
+    const double ratio = std::min(ratio_w, ratio_h);
+
+    if (ratio >= 1.0) {
         out_w = original_w;
         out_h = original_h;
     } else {
-        out_w = static_cast<int>(original_w * ratio);
-        out_h = static_cast<int>(original_h * ratio);
+        out_w = std::max(1, static_cast<int>(original_w * ratio));
+        out_h = std::max(1, static_cast<int>(original_h * ratio));
     }
 }
 
@@ -355,12 +440,77 @@ static void fit_inside_box(int original_w, int original_h, int max_w, int max_h,
 // ---------------------------------------------------------------------------
 
 static char* encode_jpeg_to_base64_cstr(const std::vector<unsigned char>& jpeg_buffer) {
+    if (jpeg_buffer.empty()) return nullptr;
+
     std::string base64 = base64_encode(jpeg_buffer.data(), jpeg_buffer.size());
     char* result = static_cast<char*>(malloc(base64.size() + 1));
     if (!result) return nullptr;
     std::memcpy(result, base64.c_str(), base64.size());
     result[base64.size()] = '\0';
     return result;
+}
+
+struct StbiImageDeleter {
+    void operator()(unsigned char* image) const { stbi_image_free(image); }
+};
+
+using StbiImage = std::unique_ptr<unsigned char, StbiImageDeleter>;
+
+static int clamp_quality(int quality) { return std::max(1, std::min(quality, 100)); }
+
+static char* compress_decoded_image(StbiImage image, int width, int height, int channels,
+                                    int orientation, int quality, int max_width, int max_height) {
+    if (!image || width <= 0 || height <= 0 || channels < 1 || channels > 4) return nullptr;
+
+    size_t image_size = 0;
+    if (!calculate_buffer_size(width, height, channels, image_size)) return nullptr;
+
+    const unsigned char* pixels = image.get();
+    int current_width = width;
+    int current_height = height;
+    std::vector<unsigned char> oriented_buffer;
+
+    if (orientation >= 2 && orientation <= 8) {
+        oriented_buffer.resize(image_size);
+        if (!apply_orientation(image.get(), oriented_buffer.data(), width, height, channels,
+                               orientation)) {
+            return nullptr;
+        }
+
+        pixels = oriented_buffer.data();
+        if (orientation_swaps_dimensions(orientation)) {
+            std::swap(current_width, current_height);
+        }
+        image.reset();
+    }
+
+    const int width_limit = max_width > 0 ? max_width : current_width;
+    const int height_limit = max_height > 0 ? max_height : current_height;
+    int output_width = current_width;
+    int output_height = current_height;
+    fit_inside_box(current_width, current_height, width_limit, height_limit, output_width,
+                   output_height);
+    if (output_width <= 0 || output_height <= 0) return nullptr;
+
+    std::vector<unsigned char> resized_buffer;
+    if (output_width != current_width || output_height != current_height) {
+        if (!resize_image(pixels, current_width, current_height, channels, resized_buffer,
+                          output_width, output_height)) {
+            return nullptr;
+        }
+
+        pixels = resized_buffer.data();
+        image.reset();
+        std::vector<unsigned char>().swap(oriented_buffer);
+    }
+
+    std::vector<unsigned char> jpeg_buffer;
+    if (!compress_to_jpeg_buffer(pixels, output_width, output_height, channels,
+                                 clamp_quality(quality), jpeg_buffer)) {
+        return nullptr;
+    }
+
+    return encode_jpeg_to_base64_cstr(jpeg_buffer);
 }
 
 // ---------------------------------------------------------------------------
@@ -387,73 +537,17 @@ static char* encode_jpeg_to_base64_cstr(const std::vector<unsigned char>& jpeg_b
 extern "C" char* image_compressor_from_path(const char* path, int quality, int max_width,
                                             int max_height) {
     try {
-        if (!path) return nullptr;
-
-        quality = std::clamp(quality, 1, 100);
-
-        int width, height, channels;
-        unsigned char* img = stbi_load(path, &width, &height, &channels, 0);
-        if (!img) return nullptr;
+        if (!path || path[0] == '\0') return nullptr;
 
         const int orientation = read_exif_orientation(path);
+        int width = 0;
+        int height = 0;
+        int channels = 0;
+        StbiImage image(stbi_load(path, &width, &height, &channels, 0));
+        if (!image) return nullptr;
 
-        // Apply EXIF rotation / flip.
-        std::vector<unsigned char> rotated_buf;
-        const unsigned char* img_to_use = img;
-        int w = width, h = height;
-
-        if (orientation != 1) {
-            const size_t pixel_count = static_cast<size_t>(width) * height * channels;
-            rotated_buf.resize(pixel_count);
-
-            switch (orientation) {
-                case 2:
-                    flip_horizontal(img, rotated_buf.data(), width, height, channels);
-                    break;
-                case 3:
-                    rotate180(img, rotated_buf.data(), width, height, channels);
-                    break;
-                case 6:
-                    rotate90(img, rotated_buf.data(), width, height, channels);
-                    std::swap(w, h);
-                    break;
-                case 8:
-                    rotate270(img, rotated_buf.data(), width, height, channels);
-                    std::swap(w, h);
-                    break;
-                default:
-                    rotated_buf.clear();  // Unsupported orientation — use original.
-                    break;
-            }
-
-            if (!rotated_buf.empty()) img_to_use = rotated_buf.data();
-        }
-
-        // Compute output dimensions using the shared helper.
-        int new_w = w, new_h = h;
-        {
-            const int limit_w = (max_width > 0) ? max_width : w;
-            const int limit_h = (max_height > 0) ? max_height : h;
-            fit_inside_box(w, h, limit_w, limit_h, new_w, new_h);
-        }
-
-        std::vector<unsigned char> resized_buf;
-        if (new_w != w || new_h != h) {
-            if (!resize_image(img_to_use, w, h, channels, resized_buf, new_w, new_h)) {
-                stbi_image_free(img);
-                return nullptr;
-            }
-            img_to_use = resized_buf.data();
-            w = new_w;
-            h = new_h;
-        }
-
-        std::vector<unsigned char> jpeg_buf;
-        const bool ok = compress_to_jpeg_buffer(img_to_use, w, h, channels, quality, jpeg_buf);
-        stbi_image_free(img);
-        if (!ok) return nullptr;
-
-        return encode_jpeg_to_base64_cstr(jpeg_buf);
+        return compress_decoded_image(std::move(image), width, height, channels, orientation,
+                                      quality, max_width, max_height);
     } catch (...) {
         return nullptr;
     }
@@ -466,15 +560,12 @@ extern "C" char* image_compressor_from_path(const char* path, int quality, int m
 extern "C" void image_compressor_free_string(char* ptr) { free(ptr); }
 
 /**
- * @brief Loads, resizes and JPEG-compresses an image from a raw byte buffer.
+ * @brief Loads, EXIF-corrects, resizes and JPEG-compresses an encoded image buffer.
  *
- * EXIF orientation is intentionally skipped because bytes coming from Flutter
- * are already correctly oriented by the rendering pipeline.
- *
- * @param input_bytes Pointer to the input buffer.
+ * @param input_bytes Pointer to the encoded input image.
  * @param input_size  Size of the input buffer in bytes.
  * @param quality     JPEG quality (1–100; clamped automatically).
- * @param max_width   Maximum output width.  Pass 0 for no width constraint.
+ * @param max_width   Maximum output width. Pass 0 for no width constraint.
  * @param max_height  Maximum output height. Pass 0 for no height constraint.
  * @return Heap-allocated Base64 C string, or nullptr on failure.
  *         Caller must free it with image_compressor_free_string().
@@ -484,39 +575,16 @@ extern "C" char* image_compressor_from_bytes(const uint8_t* input_bytes, int inp
     try {
         if (!input_bytes || input_size <= 0) return nullptr;
 
-        quality = std::clamp(quality, 1, 100);
+        const int orientation = read_exif_orientation(input_bytes, static_cast<size_t>(input_size));
+        int width = 0;
+        int height = 0;
+        int channels = 0;
+        StbiImage image(
+            stbi_load_from_memory(input_bytes, input_size, &width, &height, &channels, 0));
+        if (!image) return nullptr;
 
-        int width, height, channels;
-        unsigned char* img =
-            stbi_load_from_memory(input_bytes, input_size, &width, &height, &channels, 0);
-        if (!img) return nullptr;
-
-        int w = width, h = height;
-        int new_w = w, new_h = h;
-
-        const int limit_w = (max_width > 0) ? max_width : w;
-        const int limit_h = (max_height > 0) ? max_height : h;
-        fit_inside_box(w, h, limit_w, limit_h, new_w, new_h);
-
-        const unsigned char* img_to_use = img;
-        std::vector<unsigned char> resized_buf;
-
-        if (new_w != w || new_h != h) {
-            if (!resize_image(img, w, h, channels, resized_buf, new_w, new_h)) {
-                stbi_image_free(img);
-                return nullptr;
-            }
-            img_to_use = resized_buf.data();
-            w = new_w;
-            h = new_h;
-        }
-
-        std::vector<unsigned char> jpeg_buf;
-        const bool ok = compress_to_jpeg_buffer(img_to_use, w, h, channels, quality, jpeg_buf);
-        stbi_image_free(img);
-        if (!ok) return nullptr;
-
-        return encode_jpeg_to_base64_cstr(jpeg_buf);
+        return compress_decoded_image(std::move(image), width, height, channels, orientation,
+                                      quality, max_width, max_height);
     } catch (...) {
         return nullptr;
     }
