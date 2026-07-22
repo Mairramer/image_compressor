@@ -39,3 +39,7 @@ lib/common/layout/gen/assets.gen.dart
 coverage/lcov.info
 ios/Podfile.lock
 src/tests/build/
+# SPM
+.build/
+.swiftpm/
+

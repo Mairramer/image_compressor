@@ -31,3 +31,5 @@ flutter:
         ffiPlugin: true
       ios:
         ffiPlugin: true
+        swiftPackageManagerPlugin:
+          targets: [image_compressor]
