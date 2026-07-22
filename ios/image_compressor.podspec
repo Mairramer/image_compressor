@@ -24,7 +24,7 @@ A Flutter plugin that performs fast JPEG compression using C++ via FFI.
 
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
-    'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17',
+    'CLANG_CXX_LANGUAGE_STANDARD' => 'c++11',
     'CLANG_CXX_LIBRARY' => 'libc++',
     # This helps Xcode find headers like "stb_image.h" from your .cpp file
     'HEADER_SEARCH_PATHS' => '"$(PODS_TARGET_SRCROOT)/../src" "$(PODS_TARGET_SRCROOT)/../third_party"'

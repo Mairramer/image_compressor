@@ -12,6 +12,8 @@ add_library(image_compressor SHARED
 
 set_target_properties(image_compressor PROPERTIES
     CXX_STANDARD 11
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF
     POSITION_INDEPENDENT_CODE ON
 )
 

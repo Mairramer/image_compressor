@@ -104,7 +104,6 @@ class _HomePageState extends State<HomePage> {
   • Size: ${_formatBytes(ffiResult.output.length)}
 ''';
       });
-      print(_result);
     } catch (e) {
       _showError('Error during benchmark: $e');
     } finally {

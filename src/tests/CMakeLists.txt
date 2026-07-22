@@ -11,6 +11,12 @@ add_executable(test_compress_image
     ../image_compressor.cpp
 )
 
+set_target_properties(test_compress_image PROPERTIES
+    CXX_STANDARD 11
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF
+)
+
 target_include_directories(test_compress_image
     PRIVATE
         ..
