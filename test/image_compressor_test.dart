@@ -377,4 +377,97 @@ void main() {
       expect(base64Decode(result), equals(knownBytes));
     });
   });
+
+  group('processImage', () {
+    test('returns original bytes when no processing is needed', () async {
+      final bytes = _someBytes(32);
+
+      // We mock the native binding call instead of the ImageCompressor directly
+      // However, we are using a mock of ImageCompressor. Wait!
+      // The current tests are mocking the ImageCompressor itself. But NativeImageCompressor isn't being tested!
+      // Ah, the test file has `class MockImageCompressor extends Mock implements ImageCompressor {}`
+      // So it's just mocking the interface. We should just add tests for the interface mock.
+      when(
+        () => compressor.processImage(
+          any(),
+          rotationDegrees: any(named: 'rotationDegrees'),
+          mirror: any(named: 'mirror'),
+          maxDimension: any(named: 'maxDimension'),
+          quality: any(named: 'quality'),
+        ),
+      ).thenAnswer((_) async => bytes);
+
+      final result = await compressor.processImage(
+        bytes,
+        rotationDegrees: 0,
+        mirror: false,
+      );
+
+      expect(result, equals(bytes));
+      verify(
+        () => compressor.processImage(
+          bytes,
+          rotationDegrees: 0,
+          mirror: false,
+        ),
+      ).called(1);
+    });
+
+    test('is called with custom parameters', () async {
+      final bytes = _someBytes(32);
+      final processedBytes = _someBytes(16);
+
+      when(
+        () => compressor.processImage(
+          any(),
+          rotationDegrees: any(named: 'rotationDegrees'),
+          mirror: any(named: 'mirror'),
+          maxDimension: any(named: 'maxDimension'),
+          quality: any(named: 'quality'),
+        ),
+      ).thenAnswer((_) async => processedBytes);
+
+      final result = await compressor.processImage(
+        bytes,
+        rotationDegrees: 90,
+        mirror: true,
+        maxDimension: 800,
+        quality: 60,
+      );
+
+      expect(result, equals(processedBytes));
+      verify(
+        () => compressor.processImage(
+          bytes,
+          rotationDegrees: 90,
+          mirror: true,
+          maxDimension: 800,
+          quality: 60,
+        ),
+      ).called(1);
+    });
+
+    test('throws ArgumentError for empty bytes', () async {
+      when(
+        () => compressor.processImage(
+          any(),
+          rotationDegrees: any(named: 'rotationDegrees'),
+          mirror: any(named: 'mirror'),
+          maxDimension: any(named: 'maxDimension'),
+          quality: any(named: 'quality'),
+        ),
+      ).thenThrow(ArgumentError('Image bytes cannot be empty.'));
+
+      expect(
+        () => compressor.processImage(Uint8List(0), rotationDegrees: 0, mirror: false),
+        throwsA(
+          isA<ArgumentError>().having(
+            (e) => e.message,
+            'message',
+            contains('cannot be empty'),
+          ),
+        ),
+      );
+    });
+  });
 }

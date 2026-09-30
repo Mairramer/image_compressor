@@ -45,6 +45,29 @@ __attribute__((visibility("default"))) char* image_compressor_from_path(const ch
  */
 __attribute__((visibility("default"))) void image_compressor_free_string(char* ptr);
 
+/**
+ * Processes an image byte array (resize, rotate, mirror, compress) and returns the new JPEG bytes.
+ *
+ * @param input_bytes      Pointer to the encoded input image.
+ * @param input_size       Size of the input buffer in bytes.
+ * @param rotation_degrees Rotation in degrees (0, 90, 180, 270).
+ * @param mirror           True to mirror horizontally.
+ * @param max_dimension    Maximum width/height.
+ * @param quality          JPEG quality (1-100).
+ * @param out_size         Pointer to an integer where the output size will be written.
+ * @return Pointer to a newly allocated byte array containing the JPEG data, or nullptr if no processing was needed or on failure.
+ *         If nullptr is returned and *out_size is 0, it means no processing was needed.
+ *         Must be freed by calling `image_compressor_free_buffer`.
+ */
+__attribute__((visibility("default"))) uint8_t* image_compressor_process_image(
+    const uint8_t* input_bytes, int input_size, int rotation_degrees, bool mirror,
+    int max_dimension, int quality, int* out_size);
+
+/**
+ * Frees any buffer returned by `image_compressor_process_image`.
+ */
+__attribute__((visibility("default"))) void image_compressor_free_buffer(uint8_t* ptr);
+
 #ifdef __cplusplus
 }
 #endif

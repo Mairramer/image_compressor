@@ -63,4 +63,47 @@ class ImageCompressorBindings {
   );
   late final _image_compressor_free_string = _image_compressor_free_stringPtr
       .asFunction<void Function(ffi.Pointer<ffi.Char>)>();
+
+  /// Processes an image byte array (resize, rotate, mirror, compress) and returns the new JPEG bytes.
+  ffi.Pointer<ffi.Uint8> image_compressor_process_image(
+    ffi.Pointer<ffi.Uint8> input_bytes,
+    int input_size,
+    int rotation_degrees,
+    bool mirror,
+    int max_dimension,
+    int quality,
+    ffi.Pointer<ffi.Int> out_size,
+  ) {
+    return _image_compressor_process_image(
+      input_bytes,
+      input_size,
+      rotation_degrees,
+      mirror,
+      max_dimension,
+      quality,
+      out_size,
+    );
+  }
+
+  late final _image_compressor_process_imagePtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<ffi.Uint8> Function(ffi.Pointer<ffi.Uint8>, ffi.Int, ffi.Int, ffi.Bool, ffi.Int, ffi.Int,
+              ffi.Pointer<ffi.Int>)>>('image_compressor_process_image');
+  late final _image_compressor_process_image = _image_compressor_process_imagePtr.asFunction<
+      ffi.Pointer<ffi.Uint8> Function(ffi.Pointer<ffi.Uint8>, int, int, bool, int, int, ffi.Pointer<ffi.Int>)>();
+
+  /// Frees any buffer returned by `image_compressor_process_image`.
+  void image_compressor_free_buffer(
+    ffi.Pointer<ffi.Uint8> ptr,
+  ) {
+    return _image_compressor_free_buffer(
+      ptr,
+    );
+  }
+
+  late final _image_compressor_free_bufferPtr = _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Uint8>)>>(
+    'image_compressor_free_buffer',
+  );
+  late final _image_compressor_free_buffer = _image_compressor_free_bufferPtr
+      .asFunction<void Function(ffi.Pointer<ffi.Uint8>)>();
 }

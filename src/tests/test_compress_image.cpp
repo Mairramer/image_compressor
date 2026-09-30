@@ -135,3 +135,54 @@ TEST(CompressImageTest, GoldenTest) {
             << "Compressed base64 output does not match golden file!";
     }
 }
+
+TEST(ProcessImageTest, NullAndInvalidInputsReturnNullAndZeroSize) {
+    int out_size = -1;
+    EXPECT_EQ(image_compressor_process_image(nullptr, 100, 0, false, 1920, 75, &out_size), nullptr);
+    EXPECT_EQ(out_size, 0);
+
+    const uint8_t invalid_bytes[] = {0x00, 0x01, 0x02, 0x03};
+    out_size = -1;
+    EXPECT_EQ(image_compressor_process_image(invalid_bytes, 4, 0, false, 1920, 75, &out_size), nullptr);
+    EXPECT_EQ(out_size, 0);
+}
+
+TEST(ProcessImageTest, ReturnsNullAndZeroSizeWhenNoProcessingNeeded) {
+    const char* image_path = "../test_assets/5mb.jpg";
+    const std::vector<uint8_t> bytes = readFileBytes(image_path);
+    ASSERT_FALSE(bytes.empty());
+
+    int out_size = -1;
+    // The 5mb.jpg is probably smaller than 10000x10000.
+    // So 0 rotation, no mirror, very large max dimension -> should return null
+    uint8_t* result = image_compressor_process_image(bytes.data(), bytes.size(), 0, false, 10000, 75, &out_size);
+    EXPECT_EQ(result, nullptr);
+    EXPECT_EQ(out_size, 0);
+}
+
+TEST(ProcessImageTest, ReturnsProcessedBytesWhenRotationOrMirrorOrResizeNeeded) {
+    const char* image_path = "../test_assets/5mb.jpg";
+    const std::vector<uint8_t> bytes = readFileBytes(image_path);
+    ASSERT_FALSE(bytes.empty());
+
+    int out_size = -1;
+    // Force rotation
+    uint8_t* result = image_compressor_process_image(bytes.data(), bytes.size(), 90, false, 10000, 75, &out_size);
+    ASSERT_NE(result, nullptr);
+    EXPECT_GT(out_size, 0);
+    image_compressor_free_buffer(result);
+
+    // Force mirror
+    out_size = -1;
+    result = image_compressor_process_image(bytes.data(), bytes.size(), 0, true, 10000, 75, &out_size);
+    ASSERT_NE(result, nullptr);
+    EXPECT_GT(out_size, 0);
+    image_compressor_free_buffer(result);
+
+    // Force resize
+    out_size = -1;
+    result = image_compressor_process_image(bytes.data(), bytes.size(), 0, false, 100, 75, &out_size);
+    ASSERT_NE(result, nullptr);
+    EXPECT_GT(out_size, 0);
+    image_compressor_free_buffer(result);
+}

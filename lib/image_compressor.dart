@@ -5,6 +5,8 @@ import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 
+import 'image_compressor_bindings_generated.dart';
+
 /// Interface that defines the contract for image compression implementations.
 abstract class ImageCompressor {
   /// Compresses an image from the given [path].
@@ -35,6 +37,18 @@ abstract class ImageCompressor {
     int quality = 75,
     int maxWidth = 1080,
     int maxHeight = 1920,
+  });
+
+  /// Processes an image from the given [bytes] applying rotation, mirror, and resizing.
+  /// 
+  /// Returns a [Future] that completes with the processed image encoded as bytes (JPEG).
+  /// If the image already satisfies the constraints, the original [bytes] are returned.
+  Future<Uint8List> processImage(
+    Uint8List bytes, {
+    required int rotationDegrees,
+    required bool mirror,
+    int maxDimension = 1920,
+    int quality = 70,
   });
 }
 
@@ -69,7 +83,11 @@ class NativeImageCompressor implements ImageCompressor {
     _freeString = _nativeLib.lookupFunction<Void Function(Pointer<Utf8>), void Function(Pointer<Utf8>)>(
       'image_compressor_free_string',
     );
+    
+    _bindings = ImageCompressorBindings(_nativeLib);
   }
+
+  late final ImageCompressorBindings _bindings;
 
   /// Loads the dynamic library according to the current platform.
   ///
@@ -137,6 +155,57 @@ class NativeImageCompressor implements ImageCompressor {
       return _processNativeResult(resultPtr, context: 'compressImageFromBytes(length: ${bytes.length})');
     } finally {
       malloc.free(bytesPtr);
+    }
+  }
+
+  @override
+  Future<Uint8List> processImage(
+    Uint8List bytes, {
+    required int rotationDegrees,
+    required bool mirror,
+    int maxDimension = 1920,
+    int quality = 70,
+  }) async {
+    if (bytes.isEmpty) {
+      throw ArgumentError('Image bytes cannot be empty.');
+    }
+
+    final Pointer<Uint8> bytesPtr = malloc.allocate<Uint8>(bytes.length);
+    final Pointer<Int> outSizePtr = malloc.allocate<Int>(sizeOf<Int>());
+    try {
+      bytesPtr.asTypedList(bytes.length).setAll(0, bytes);
+
+      final Pointer<Uint8> resultPtr = _bindings.image_compressor_process_image(
+        bytesPtr,
+        bytes.length,
+        rotationDegrees,
+        mirror,
+        maxDimension,
+        quality,
+        outSizePtr,
+      );
+
+      final int outSize = outSizePtr.value;
+      if (resultPtr == nullptr && outSize == 0) {
+        // No processing needed
+        return bytes;
+      }
+
+      if (resultPtr == nullptr) {
+        throw Exception(
+          'Image processing failed: native returned null pointer.',
+        );
+      }
+
+      try {
+        final Uint8List resultBytes = Uint8List.fromList(resultPtr.asTypedList(outSize));
+        return resultBytes;
+      } finally {
+        _bindings.image_compressor_free_buffer(resultPtr);
+      }
+    } finally {
+      malloc.free(bytesPtr);
+      malloc.free(outSizePtr);
     }
   }
 

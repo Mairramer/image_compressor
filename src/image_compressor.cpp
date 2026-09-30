@@ -589,3 +589,114 @@ extern "C" char* image_compressor_from_bytes(const uint8_t* input_bytes, int inp
         return nullptr;
     }
 }
+
+static int get_orientation(int rotation_degrees, bool mirror) {
+    rotation_degrees = (rotation_degrees % 360 + 360) % 360;
+    if (!mirror) {
+        if (rotation_degrees == 90) return 6;
+        if (rotation_degrees == 180) return 3;
+        if (rotation_degrees == 270) return 8;
+        return 1;
+    } else {
+        if (rotation_degrees == 0) return 2;
+        if (rotation_degrees == 90) return 5;
+        if (rotation_degrees == 180) return 4;
+        if (rotation_degrees == 270) return 7;
+        return 2;
+    }
+}
+
+extern "C" uint8_t* image_compressor_process_image(const uint8_t* input_bytes, int input_size,
+                                                   int rotation_degrees, bool mirror,
+                                                   int max_dimension, int quality, int* out_size) {
+    if (!out_size) return nullptr;
+    *out_size = 0;
+
+    try {
+        if (!input_bytes || input_size <= 0) return nullptr;
+
+        int width = 0;
+        int height = 0;
+        int channels = 0;
+        
+        StbiImage image(
+            stbi_load_from_memory(input_bytes, input_size, &width, &height, &channels, 0));
+        if (!image) return nullptr;
+
+        bool needs_processing = false;
+        
+        int orientation = get_orientation(rotation_degrees, mirror);
+        if (orientation != 1) {
+            needs_processing = true;
+        }
+
+        if (width > max_dimension || height > max_dimension) {
+            needs_processing = true;
+        }
+
+        if (!needs_processing) {
+            return nullptr;
+        }
+
+        size_t image_size = 0;
+        if (!calculate_buffer_size(width, height, channels, image_size)) return nullptr;
+
+        const unsigned char* pixels = image.get();
+        int current_width = width;
+        int current_height = height;
+        std::vector<unsigned char> oriented_buffer;
+
+        if (orientation >= 2 && orientation <= 8) {
+            oriented_buffer.resize(image_size);
+            if (!apply_orientation(image.get(), oriented_buffer.data(), width, height, channels,
+                                   orientation)) {
+                return nullptr;
+            }
+
+            pixels = oriented_buffer.data();
+            if (orientation_swaps_dimensions(orientation)) {
+                std::swap(current_width, current_height);
+            }
+            image.reset();
+        }
+
+        int output_width = current_width;
+        int output_height = current_height;
+        if (current_width > max_dimension || current_height > max_dimension) {
+            const double ratio_w = static_cast<double>(max_dimension) / current_width;
+            const double ratio_h = static_cast<double>(max_dimension) / current_height;
+            const double ratio = std::min(ratio_w, ratio_h);
+            output_width = std::max(1, static_cast<int>(current_width * ratio));
+            output_height = std::max(1, static_cast<int>(current_height * ratio));
+        }
+
+        std::vector<unsigned char> resized_buffer;
+        if (output_width != current_width || output_height != current_height) {
+            if (!resize_image(pixels, current_width, current_height, channels, resized_buffer,
+                              output_width, output_height)) {
+                return nullptr;
+            }
+
+            pixels = resized_buffer.data();
+            image.reset();
+            std::vector<unsigned char>().swap(oriented_buffer);
+        }
+
+        std::vector<unsigned char> jpeg_buffer;
+        if (!compress_to_jpeg_buffer(pixels, output_width, output_height, channels,
+                                     clamp_quality(quality), jpeg_buffer)) {
+            return nullptr;
+        }
+
+        uint8_t* result = static_cast<uint8_t*>(malloc(jpeg_buffer.size()));
+        if (!result) return nullptr;
+        std::memcpy(result, jpeg_buffer.data(), jpeg_buffer.size());
+        *out_size = static_cast<int>(jpeg_buffer.size());
+        return result;
+
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+extern "C" void image_compressor_free_buffer(uint8_t* ptr) { free(ptr); }
