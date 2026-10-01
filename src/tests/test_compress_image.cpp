@@ -186,3 +186,41 @@ TEST(ProcessImageTest, ReturnsProcessedBytesWhenRotationOrMirrorOrResizeNeeded) 
     EXPECT_GT(out_size, 0);
     image_compressor_free_buffer(result);
 }
+
+TEST(ProcessImageTest, AutomaticallyAppliesExifOrientation) {
+    const char* exif_6_path = "../test_assets/exif_6.jpg";
+    const std::vector<uint8_t> bytes_6 = readFileBytes(exif_6_path);
+    ASSERT_FALSE(bytes_6.empty());
+
+    int out_size = -1;
+    // We pass 0 rotation and no mirror, but the image has EXIF 6.
+    // It should detect the EXIF orientation and process it.
+    uint8_t* result = image_compressor_process_image(bytes_6.data(), bytes_6.size(), 0, false, 10000, 75, &out_size);
+    ASSERT_NE(result, nullptr) << "Expected processing due to EXIF 6";
+    EXPECT_GT(out_size, 0);
+    image_compressor_free_buffer(result);
+
+    const char* exif_3_path = "../test_assets/exif_3.jpg";
+    const std::vector<uint8_t> bytes_3 = readFileBytes(exif_3_path);
+    ASSERT_FALSE(bytes_3.empty());
+
+    out_size = -1;
+    result = image_compressor_process_image(bytes_3.data(), bytes_3.size(), 0, false, 10000, 75, &out_size);
+    ASSERT_NE(result, nullptr) << "Expected processing due to EXIF 3";
+    EXPECT_GT(out_size, 0);
+    image_compressor_free_buffer(result);
+}
+
+TEST(ProcessImageTest, CombinesExifOrientationWithUserRotation) {
+    const char* exif_6_path = "../test_assets/exif_6.jpg";
+    const std::vector<uint8_t> bytes = readFileBytes(exif_6_path);
+    ASSERT_FALSE(bytes.empty());
+
+    int out_size = -1;
+    // Pass user rotation = 90
+    // It should apply EXIF 6 (which swaps dimensions) and then user rotation 90 (which swaps them again)
+    uint8_t* result = image_compressor_process_image(bytes.data(), bytes.size(), 90, false, 10000, 75, &out_size);
+    ASSERT_NE(result, nullptr);
+    EXPECT_GT(out_size, 0);
+    image_compressor_free_buffer(result);
+}

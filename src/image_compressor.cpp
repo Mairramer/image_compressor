@@ -623,10 +623,12 @@ extern "C" uint8_t* image_compressor_process_image(const uint8_t* input_bytes, i
             stbi_load_from_memory(input_bytes, input_size, &width, &height, &channels, 0));
         if (!image) return nullptr;
 
+        const int exif_orientation = read_exif_orientation(input_bytes, static_cast<size_t>(input_size));
+        const int user_orientation = get_orientation(rotation_degrees, mirror);
+
         bool needs_processing = false;
         
-        int orientation = get_orientation(rotation_degrees, mirror);
-        if (orientation != 1) {
+        if (exif_orientation != 1 || user_orientation != 1) {
             needs_processing = true;
         }
 
@@ -644,21 +646,34 @@ extern "C" uint8_t* image_compressor_process_image(const uint8_t* input_bytes, i
         const unsigned char* pixels = image.get();
         int current_width = width;
         int current_height = height;
-        std::vector<unsigned char> oriented_buffer;
+        std::vector<unsigned char> oriented_buffer1;
+        std::vector<unsigned char> oriented_buffer2;
 
-        if (orientation >= 2 && orientation <= 8) {
-            oriented_buffer.resize(image_size);
-            if (!apply_orientation(image.get(), oriented_buffer.data(), width, height, channels,
-                                   orientation)) {
+        if (exif_orientation >= 2 && exif_orientation <= 8) {
+            oriented_buffer1.resize(image_size);
+            if (!apply_orientation(pixels, oriented_buffer1.data(), current_width, current_height, channels,
+                                   exif_orientation)) {
                 return nullptr;
             }
-
-            pixels = oriented_buffer.data();
-            if (orientation_swaps_dimensions(orientation)) {
+            pixels = oriented_buffer1.data();
+            if (orientation_swaps_dimensions(exif_orientation)) {
                 std::swap(current_width, current_height);
             }
-            image.reset();
         }
+
+        if (user_orientation >= 2 && user_orientation <= 8) {
+            oriented_buffer2.resize(image_size);
+            if (!apply_orientation(pixels, oriented_buffer2.data(), current_width, current_height, channels,
+                                   user_orientation)) {
+                return nullptr;
+            }
+            pixels = oriented_buffer2.data();
+            if (orientation_swaps_dimensions(user_orientation)) {
+                std::swap(current_width, current_height);
+            }
+        }
+        
+        image.reset();
 
         int output_width = current_width;
         int output_height = current_height;
@@ -678,8 +693,8 @@ extern "C" uint8_t* image_compressor_process_image(const uint8_t* input_bytes, i
             }
 
             pixels = resized_buffer.data();
-            image.reset();
-            std::vector<unsigned char>().swap(oriented_buffer);
+            std::vector<unsigned char>().swap(oriented_buffer1);
+            std::vector<unsigned char>().swap(oriented_buffer2);
         }
 
         std::vector<unsigned char> jpeg_buffer;
