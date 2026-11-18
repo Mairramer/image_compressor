@@ -1,7 +1,14 @@
 #ifndef IMAGE_COMPRESSOR_H
 #define IMAGE_COMPRESSOR_H
 
-#include <cstdint>
+#include <stdbool.h>
+#include <stdint.h>
+
+#if defined(__GNUC__) || defined(__clang__)
+#define IMAGE_COMPRESSOR_EXPORT __attribute__((visibility("default"))) __attribute__((used))
+#else
+#define IMAGE_COMPRESSOR_EXPORT
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -19,10 +26,10 @@ extern "C" {
  * @return Base64 string allocated with malloc. Must be freed using
  *         image_compressor_free_string.
  */
-__attribute__((visibility("default"))) char* image_compressor_from_bytes(const uint8_t* input_bytes,
-                                                                         int input_size,
-                                                                         int quality, int max_width,
-                                                                         int max_height);
+IMAGE_COMPRESSOR_EXPORT char* image_compressor_from_bytes(const uint8_t* input_bytes,
+                                                          int input_size,
+                                                          int quality, int max_width,
+                                                          int max_height);
 
 /**
  * Compress an image from a file path into a JPEG Base64 string.
@@ -35,15 +42,15 @@ __attribute__((visibility("default"))) char* image_compressor_from_bytes(const u
  *         Must be freed by calling `image_compressor_free_string`.
  *         Returns nullptr on failure.
  */
-__attribute__((visibility("default"))) char* image_compressor_from_path(const char* path,
-                                                                        int quality, int max_width,
-                                                                        int max_height);
+IMAGE_COMPRESSOR_EXPORT char* image_compressor_from_path(const char* path,
+                                                         int quality, int max_width,
+                                                         int max_height);
 
 /**
  * Frees any C string returned by `image_compressor_from_path` or
  * `image_compressor_from_bytes`.
  */
-__attribute__((visibility("default"))) void image_compressor_free_string(char* ptr);
+IMAGE_COMPRESSOR_EXPORT void image_compressor_free_string(char* ptr);
 
 /**
  * Processes an image byte array (resize, rotate, mirror, compress) and returns the new JPEG bytes.
@@ -59,14 +66,14 @@ __attribute__((visibility("default"))) void image_compressor_free_string(char* p
  *         If nullptr is returned and *out_size is 0, it means no processing was needed.
  *         Must be freed by calling `image_compressor_free_buffer`.
  */
-__attribute__((visibility("default"))) uint8_t* image_compressor_process_image(
+IMAGE_COMPRESSOR_EXPORT uint8_t* image_compressor_process_image(
     const uint8_t* input_bytes, int input_size, int rotation_degrees, bool mirror,
     int max_dimension, int quality, int* out_size);
 
 /**
  * Frees any buffer returned by `image_compressor_process_image`.
  */
-__attribute__((visibility("default"))) void image_compressor_free_buffer(uint8_t* ptr);
+IMAGE_COMPRESSOR_EXPORT void image_compressor_free_buffer(uint8_t* ptr);
 
 #ifdef __cplusplus
 }

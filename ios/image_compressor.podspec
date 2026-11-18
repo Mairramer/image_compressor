@@ -12,12 +12,11 @@ A Flutter plugin that performs fast JPEG compression using C++ via FFI.
   s.author           = { 'Mairramer Veloso' => 'mairramer.dasilva28@hotmail.com' }
   s.source           = { :path => '.' }
 
-  # 💡 This is the key change.
-  # It includes any files in `ios/Classes` AND all .h/.cpp files from the external `src` folder.
-  s.source_files = 'Classes/**/*.{h,m,mm}', '../src/**/*.{h,cpp}', '../third_party/stb/*.h'
+  # Includes files in the Swift Package Manager Sources directory AND all .h/.cpp files from `src` and `third_party`.
+  s.source_files = 'image_compressor/Sources/image_compressor/**/*.{h,m,mm}', '../src/**/*.{h,cpp}', '../third_party/stb/*.h'
 
-  # 💡 Point the public header to its location in the `src` folder.
-  s.public_header_files = '../src/image_compressor.h'
+  # Point the public header to its location in the `src` folder.
+  s.public_header_files = 'image_compressor/Sources/image_compressor/include/**/*.h', '../src/image_compressor.h'
 
   s.dependency 'Flutter'
   s.platform = :ios, '12.0'
